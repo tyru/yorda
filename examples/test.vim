@@ -1,2 +1,1 @@
-echo 'hello'
-let s = 1 + 2
+let s:is_win = has('win32')

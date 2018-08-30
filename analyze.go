@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"reflect"
+	"io"
+	"os"
 
 	"github.com/haya14busa/go-vimlparser/ast"
+	"github.com/haya14busa/go-vimlparser/token"
 	"github.com/pkg/errors"
 )
 
@@ -77,307 +79,286 @@ func (f *analyFile) toSetPos() setPos {
 }
 
 func analyze(fset *fileSet) error {
-	return (&analyzer{fset, NewScope(nil)}).Run()
+	return (&analyzer{fset, newNodeDB()}).Run()
 }
 
 type analyzer struct {
-	fset *fileSet
-	nsdb *Scope
+	fset   *fileSet
+	nodeDB *nodeDB
 }
 
 // Run infers the types of file set.
 func (a *analyzer) Run() error {
 	var err error
 	a.fset.Iterate(func(f *analyFile) bool {
-		err = a.inferFile(f.fileNode)
+		err = a.addNodeInfo(f.fileNode)
+		if err != nil {
+			return false
+		}
+		// TODO query dumped prolog code to prolog processor
+		err = a.dump(f.name+".pro", f.fileNode)
 		return err == nil
 	})
 	return err
 }
 
-func (a *analyzer) inferFile(node *ast.File) error {
-	// TODO Convert nodes to SSA form
-	// https://dev.to/miura1729/-2376
-	return a.inferExpr(node)
-}
-
-// inferExpr infers the types of expressions in given file node.
-func (a *analyzer) inferExpr(node *ast.File) error {
-	// Infer the types of literal
-	base := &visitorBase{
-		e:           nil,
-		fset:        a.fset,
-		nodeInfoMap: make(map[setPos][]nodeInfo),
-		inferQueue:  make([]ast.Node, 0),
-		scope:       a.nsdb,
-	}
-	v := &fileVisitor{base}
+func (a *analyzer) addNodeInfo(node *ast.File) error {
+	v := &nodeInfoVisitor{nodeDB: a.nodeDB}
 	ast.Walk(v, node)
-	return base.e
+	return v.err
 }
 
-type visitorBase struct {
-	e           error
-	fset        *fileSet
-	nodeInfoMap map[setPos][]nodeInfo
-	inferQueue  []ast.Node
-	scope       *Scope
+// TODO
+func (a *analyzer) dump(outname string, node *ast.File) error {
+	fmt.Printf("---------- %s ----------\n", outname)
+	conv := &converter{indent: "  ", nodeDB: a.nodeDB}
+	_, err := io.Copy(os.Stdout, conv.toReader(node))
+	fmt.Println()
+	return err
 }
 
-func (base *visitorBase) err(cause error, msg string) ast.Visitor {
-	base.e = errors.Wrap(cause, msg)
-	return nil
+// nodeInfoVisitor visits nodes and adds some information in nodeInfo.
+// See nodeInfoKey for details.
+type nodeInfoVisitor struct {
+	nodeDB *nodeDB
+	err    error
 }
 
-func (base *visitorBase) log(node ast.Node) {
-	fmt.Printf("node = (%+v) %+v\n", reflect.TypeOf(node), node)
-}
-
-var errNoSuchNode = errors.New("no such node in file set")
-
-func (base *visitorBase) determine(node ast.Node, typ nodeType) error {
-	npos := node.Pos()
-	f := base.fset.File(npos)
-	if f == nil {
-		return errNoSuchNode
+// ast.BasicLit:
+//   * type = the type of the literal
+//   * kind = kindLiteral
+// ast.CallExpr:
+//   * type = the type of the function
+//   * kind = kindFunCall
+// ast.Function:
+//   * type = the type of the function
+//   * kind = kindFunDecl
+// ast.Let, ast.For:
+//   * lhs
+//     * type = the type of the expression which lhs varname refers to
+//     * kind = kindVarname
+//   * rhs
+//     * type = the type of the variable
+//     * kind = kindVarname
+// ast.Ident: It must be refering to a existing variable or a function.
+//   * type = <existing variable/function>.type
+//   * kind = <existing variable/function>.kind
+// * If the node is *ast.Function, determine the type of function.
+func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
+	if node == nil || v.nodeDB.knownNode(node) {
+		return v
 	}
-	pos := setPos(f.base + int64(npos.Offset))
-	base.nodeInfoMap[pos] = append(base.nodeInfoMap[pos], nodeInfo{node, typ})
-	return nil
-}
+	switch n := node.(type) {
+	case *ast.File:
 
-func (base *visitorBase) determineLater(node ast.Node) error {
-	base.inferQueue = append(base.inferQueue, node)
-	return base.determine(node, unknownType)
-}
+	case *ast.Comment:
 
-func (base *visitorBase) pushScope() {
-	base.scope = NewScope(base.scope)
-}
+	case *ast.Excmd:
 
-func (base *visitorBase) popScope() {
-	base.scope = base.scope.Outer
-}
-
-var errUnmatchedNode = func(node ast.Node) error {
-	return errors.Errorf("unmatched node: (%+v) %+v", reflect.TypeOf(node), node)
-}
-
-// fileVisitor is an ast.Visitor for ast.File .
-type fileVisitor struct {
-	*visitorBase
-}
-
-func (v *fileVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		return nil // end of visit
-	}
-	if _, ok := node.(*ast.File); !ok {
-		return v.err(errUnmatchedNode(node), "file")
-	}
-	if err := v.determine(node, noType); err != nil {
-		return v.err(err, "file")
-	}
-	return &stmtVisitor{v.visitorBase, v}
-}
-
-// stmtVisitor is an ast.Visitor for ast.Statement .
-type stmtVisitor struct {
-	*visitorBase
-	parent ast.Visitor
-}
-
-func (v *stmtVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		return v.parent
-	}
-	switch node.(type) {
 	case *ast.Function:
-		if err := v.determine(node, noType); err != nil {
-			return v.err(err, "statement")
+		// Build vim type of the function.
+		// TODO get return type from comment before function node
+		argsTypes := make([]vimType, len(n.Params))
+		for i := range argsTypes {
+			argsTypes[i] = typeAny
 		}
-		v.pushScope()
-		return &functionVisitor{v.visitorBase, v}
+		typ := newFuncType(newTupleType(argsTypes...), typeAny)
+		// Set type, kind to function name node.
+		ast.Inspect(n.Name, func(n ast.Node) bool {
+			id, ok := n.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			kind := kindFunDecl
+			cname := v.nodeDB.newCNameByName(id.Name, true)
+			info := identInfo{id, cname, kind, typ}
+			v.nodeDB.setIdentInfo(info)
+			return true
+		})
+		// Add parameter identifiers to inner scope.
+		v.nodeDB.pushScope()
+		v.nodeDB.setFuncParams(n.Params)
+
+	case *ast.EndFunction:
+		v.nodeDB.popScope()
+
+	case *ast.DelFunction:
+
+	case *ast.Return:
+
+	case *ast.ExCall:
+
 	case *ast.Let:
-		if err := v.determine(node, noType); err != nil {
-			return v.err(err, "statement")
+		v.nodeDB.setLHS(n.Left, n.List, n.Rest)
+		v.err = v.checkRefIdents(n.Right)
+		if v.err != nil {
+			return nil
 		}
-		return &letVisitor{v.visitorBase, v}
+
+	case *ast.UnLet:
+
+	case *ast.LockVar:
+
+	case *ast.UnLockVar:
+
+	case *ast.If:
+
+	case *ast.ElseIf:
+
+	case *ast.Else:
+
+	case *ast.EndIf:
+
+	case *ast.While:
+
+	case *ast.EndWhile:
+
+	case *ast.For:
+		v.nodeDB.setLHS(n.Left, n.List, n.Rest)
+		v.err = v.checkRefIdents(n.Right)
+		if v.err != nil {
+			return nil
+		}
+
+	case *ast.EndFor:
+
+	case *ast.Continue:
+
+	case *ast.Break:
+
+	case *ast.Try:
+
+	case *ast.Catch:
+
+	case *ast.Finally:
+
+	case *ast.EndTry:
+
+	case *ast.Throw:
+
 	case *ast.EchoCmd:
-		if err := v.determine(node, noType); err != nil {
-			return v.err(err, "statement")
+
+	case *ast.Echohl:
+
+	case *ast.Execute:
+
+	case *ast.TernaryExpr:
+
+	case *ast.BinaryExpr:
+
+	case *ast.UnaryExpr:
+
+	case *ast.SubscriptExpr:
+
+	case *ast.SliceExpr:
+
+	case *ast.CallExpr:
+		ast.Inspect(n.Fun, func(n ast.Node) bool {
+			// Set ident information of the left-most identifier.
+			if id, ok := n.(*ast.Ident); ok {
+				info := v.nodeDB.getIdentInfo(id, true)
+				if info == nil {
+					v.err = errorf(id, "unresolved reference of %s: %+v (%T)", id.Name, id, id)
+					return false
+				}
+				// Change kind to kindFunCall
+				newInfo := identInfo{id, info.cname, kindFunCall, info.typ}
+				v.nodeDB.setIdentInfo(newInfo)
+				return true
+			}
+			// If it's not an identifier, delegate to Visit()
+			if v.Visit(n) == nil {
+				if v.err == nil {
+					v.err = errorf(n, "fatal: v.Visit() returns nil but v.err == nil")
+				}
+			}
+			return v.err == nil
+		})
+		if v.err != nil {
+			return nil
 		}
-		return &echoCmdVisitor{v.visitorBase, v}
-	case ast.ExCommand:
-		if err := v.determine(node, noType); err != nil {
-			return v.err(err, "statement")
+
+	case *ast.DotExpr:
+		// TODO check variable in n.Left
+		// FIXME kindProp.isFunc() returns false, but obj.prop may be a function!
+		v.nodeDB.setKind(n.Right, kindProp)
+
+	case *ast.BasicLit:
+		switch n.Kind {
+		case token.NUMBER:
+			v.nodeDB.setType(n, typeInt)
+			v.nodeDB.setKind(n, kindLiteral)
+		case token.STRING:
+			v.nodeDB.setType(n, typeString)
+			v.nodeDB.setKind(n, kindLiteral)
+		case token.OPTION:
+			v.nodeDB.setType(n, getTypeOfVimOption(n.Value))
+			v.nodeDB.setKind(n, kindLiteral)
+		case token.ENV:
+			v.nodeDB.setType(n, typeString)
+			v.nodeDB.setKind(n, kindLiteral)
+		case token.REG:
+			v.nodeDB.setType(n, typeString)
+			v.nodeDB.setKind(n, kindLiteral)
 		}
-		return &exCommandVisitor{v.visitorBase, v}
-	case ast.Statement:
-		if err := v.determine(node, noType); err != nil {
-			return v.err(err, "statement")
+
+	case *ast.List:
+		v.nodeDB.setType(n, typeList)
+		v.nodeDB.setKind(n, kindLiteral)
+
+	case *ast.Dict:
+		v.nodeDB.setType(n, typeDict)
+		v.nodeDB.setKind(n, kindLiteral)
+
+	case *ast.Ident:
+		// Check unmarked identifier nodes.
+		// It must be refering to a existing variable or a function.
+		info := v.nodeDB.getIdentInfo(n, true)
+		if info == nil {
+			info = v.nodeDB.getIdentInfo(n, false)
+			if info == nil {
+				v.err = errorf(n, "could not look up the identifier: %s", n.Name)
+				return nil
+			}
 		}
-		return v
+		v.nodeDB.setIdentInfo(*info)
+
+	case *ast.CurlyName:
+
+	case *ast.CurlyNameLit:
+
+	case *ast.CurlyNameExpr:
+
+	case *ast.LambdaExpr:
+		// TODO get return type from comment before lambda node
+		argsTypes := make([]vimType, len(n.Params))
+		for i := range argsTypes {
+			argsTypes[i] = typeAny
+		}
+		typ := newFuncType(newTupleType(argsTypes...), typeAny)
+		v.nodeDB.setType(n, typ)
+		v.nodeDB.setKind(n, kindLiteral)
+
+	case *ast.ParenExpr:
+
 	default:
-		// Given node must be ast.Statement
-		return v.err(errUnmatchedNode(node), "statement")
+		panic(fmt.Sprintf("nodeInfoVisitor.Visit(): unexpected node type %T", n))
 	}
-}
-
-// functionVisitor is an ast.Visitor for ast.Let .
-type functionVisitor struct {
-	*visitorBase
-	parent ast.Visitor
-}
-
-func (v *functionVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		v.popScope()
-		return v.parent
-	}
-	// TODO
 	return v
 }
 
-// letVisitor is an ast.Visitor for ast.Let .
-type letVisitor struct {
-	*visitorBase
-	parent ast.Visitor
-}
-
-func (v *letVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		return v.parent
-	}
-	switch node.(type) {
-	case ast.Expr:
-		if err := v.determineLater(node); err != nil {
-			return v.err(err, "let")
+// checkRefIdents checks identifiers of rhs.
+// checkRefIdents marks node as read, by calling nodeDB.setKind().
+func (v *nodeInfoVisitor) checkRefIdents(node ast.Node) error {
+	var err error
+	ast.Inspect(node, func(n ast.Node) bool {
+		// The node must be seen before.
+		if v.Visit(n) == nil {
+			if v.err == nil {
+				v.err = errorf(n, "fatal: v.Visit() returns nil but v.err == nil")
+			}
 		}
-		return v
-	default:
-		// Given node must be ast.Expr
-		return v.err(errUnmatchedNode(node), "let")
-	}
-}
-
-// echoCmdVisitor is an ast.Visitor for ast.Let .
-type echoCmdVisitor struct {
-	*visitorBase
-	parent ast.Visitor
-}
-
-func (v *echoCmdVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		return v.parent
-	}
-	switch node.(type) {
-	case ast.Expr:
-		if err := v.determineLater(node); err != nil {
-			return v.err(err, "echo")
-		}
-		return v
-	default:
-		// Given node must be ast.Expr
-		return v.err(errUnmatchedNode(node), "echo")
-	}
-}
-
-// exCommandVisitor is an ast.Visitor for ast.Let .
-type exCommandVisitor struct {
-	*visitorBase
-	parent ast.Visitor
-}
-
-func (v *exCommandVisitor) Visit(node ast.Node) ast.Visitor {
-	v.log(node)
-	if node == nil {
-		return v.parent
-	}
-	return v
-}
-
-type nodeType int
-
-const (
-	noType nodeType = iota
-	unknownType
-	voidType
-
-	intType
-	floatType
-	stringType
-
-	listType
-	dictType
-	tupleType
-	unionType
-)
-
-type nodeInfo struct {
-	ast.Node
-	typ nodeType
-}
-
-// NewScope is the constructor for Scope.
-func NewScope(outer *Scope) *Scope {
-	return &Scope{outer, nil}
-}
-
-// ObjKind is the types of object.
-type ObjKind int
-
-// The list of possible Object kinds.
-const (
-	Bad ObjKind = iota // for error handling
-	Pkg                // package
-	Con                // constant
-	Typ                // type
-	Var                // variable
-	Fun                // function or method
-	Lbl                // label
-)
-
-// An Object describes a named language entity such as a package,
-// constant, type, variable, function (incl. methods), or label.
-//
-// The Data fields contains object-specific data:
-//
-//	Kind    Data type         Data value
-//	Pkg     *Scope            package scope
-//	Con     int               iota for the respective declaration
-//
-type Object struct {
-	Kind ObjKind
-	Name string      // declared name
-	Data interface{} // object-specific data; or nil
-	Type interface{} // placeholder for type information; may be nil
-}
-
-// Scope holds variables.
-type Scope struct {
-	Outer   *Scope
-	Objects map[string]*Object
-}
-
-// insert attempts to insert a named object obj into the scope s. If the scope
-// already contains an object alt with the same name, insert leaves the scope
-// unchanged and returns alt. Otherwise it inserts obj and returns nil.
-func (s *Scope) insert(obj *Object) (alt *Object) {
-	var ok bool
-	alt, ok = s.Objects[obj.Name]
-	if ok {
-		return
-	}
-	s.Objects[obj.Name] = obj
-	return nil
-}
-
-func (s *Scope) lookup(name string) *Object {
-	return s.Objects[name]
+		return v.err == nil
+	})
+	return err
 }
