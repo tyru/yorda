@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/haya14busa/go-vimlparser/ast"
 	"github.com/haya14busa/go-vimlparser/token"
@@ -18,7 +19,7 @@ type analyzer struct {
 // run infers the types of file set.
 func (a *analyzer) run() error {
 	var err error
-	a.fset.Iterate(func(f *analyFile) bool {
+	a.fset.iterate(func(f *analyFile) bool {
 		if f.info == nil {
 			f.info = newFileNodeInfo(f.name)
 		}
@@ -37,8 +38,9 @@ func (a *analyzer) addNodeInfo(f *analyFile) error {
 // nodeInfoVisitor visits nodes and adds some information in nodeInfo.
 // See nodeInfoKey for details.
 type nodeInfoVisitor struct {
-	info *fileNodeInfo
-	err  error
+	info        *fileNodeInfo
+	err         error
+	prevComment string
 }
 
 // ast.BasicLit:
@@ -65,22 +67,29 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	if node == nil || v.info.knownNode(node) {
 		return v
 	}
+	var comment *ast.Comment
+
 	switch n := node.(type) {
 	case *ast.File:
 
 	case *ast.Comment:
+		comment = n
 
 	case *ast.Excmd:
 
 	case *ast.Function:
 		// Build vim type of the function.
-		// TODO get return type from comment before function node
-		argsTypes := make([]vimType, len(n.Params))
-		for i := range argsTypes {
-			argsTypes[i] = newTypeVar()
+		// Get return type from comment before function node
+		// if the previous node was comment node.
+		var typ vimType
+		if v.prevComment != "" {
+			typ = v.getFuncTypeFromComment(v.prevComment, n)
+			if typ == nil {
+				typ = v.getTypeOfFunction(n)
+			}
+		} else {
+			typ = v.getTypeOfFunction(n)
 		}
-		// Set type, kind to function name node.
-		typ := newFuncType(newTupleType(argsTypes...), newTypeVar())
 		if id, ok := n.Name.(*ast.Ident); ok {
 			kind := kindFunDecl
 			cname, err := v.info.newCNameByName(id, id.Name, true)
@@ -272,6 +281,17 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	default:
 		panic(fmt.Sprintf("nodeInfoVisitor.Visit(): unexpected node type %T", n))
 	}
+
+	// Merge multiple comments into comment group.
+	if comment != nil {
+		if v.prevComment != "" {
+			v.prevComment += "\n"
+		}
+		v.prevComment += comment.Text
+	} else {
+		v.prevComment = ""
+	}
+
 	return v
 }
 
@@ -289,4 +309,135 @@ func (v *nodeInfoVisitor) checkRefIdents(node ast.Node) error {
 		return v.err == nil
 	})
 	return err
+}
+
+func (v *nodeInfoVisitor) getTypeOfFunction(f *ast.Function) vimType {
+	argsTypes := make([]vimType, len(f.Params))
+	for i := range argsTypes {
+		argsTypes[i] = newTypeVar()
+	}
+	return newFuncType(newTupleType(argsTypes...), newTypeVar())
+}
+
+func (v *nodeInfoVisitor) getFuncTypeFromComment(comment string, f *ast.Function) vimType {
+	var retType vimType
+	argsTypes := make(map[string]vimType, len(f.Params))
+	for _, line := range strings.Split(comment, "\n") {
+		l := &typeLexer{s: line}
+		l.acceptRun(" \t")
+		if !l.accept("@") {
+			continue
+		}
+		word := l.nextWord()
+		if word != "param" && word != "returns" && word != "return" {
+			continue
+		}
+		accepted := l.acceptRun(" \t") && l.accept("{")
+		if !accepted {
+			continue
+		}
+		typ := v.parseType(l)
+		if typ == nil {
+			continue
+		}
+		if !l.accept("}") {
+			continue
+		}
+		if word == "param" {
+			if !l.acceptRun(" \t") {
+				continue
+			}
+			varname := l.nextWord()
+			if varname == "" {
+				continue
+			}
+			argsTypes[varname] = typ
+		} else {
+			retType = typ
+		}
+	}
+	args := make([]vimType, len(f.Params))
+	for i, id := range f.Params {
+		if argsTypes[id.Name] != nil {
+			args[i] = argsTypes[id.Name]
+		} else {
+			args[i] = newTypeVar()
+		}
+	}
+	if retType == nil {
+		retType = newTypeVar()
+	}
+	return newFuncType(newTupleType(args...), retType)
+}
+
+func (v *nodeInfoVisitor) parseType(l *typeLexer) vimType {
+	name := l.nextWord()
+	typ := getTypeID(name)
+
+	// TODO composite types
+
+	return typ
+}
+
+type typeLexer struct {
+	s   string
+	pos int
+}
+
+const lexEOF = -1
+
+func (l *typeLexer) accept(set string) bool {
+	if strings.ContainsRune(set, l.next()) {
+		return true
+	}
+	l.pos--
+	return false
+}
+
+func (l *typeLexer) acceptRun(set string) bool {
+	if strings.ContainsRune(set, l.next()) {
+		for strings.ContainsRune(set, l.next()) {
+		}
+		l.pos--
+		return true
+	}
+	l.pos--
+	return false
+}
+
+func (l *typeLexer) acceptWord(word string) bool {
+	w := l.nextWord()
+	if w == word {
+		return true
+	}
+	l.pos -= len(w)
+	return false
+}
+
+func (l *typeLexer) next() rune {
+	if l.pos >= len(l.s) {
+		return lexEOF
+	}
+	r := rune(l.s[l.pos])
+	l.pos++
+	return r
+}
+
+func (l *typeLexer) nextWord() string {
+	n := 0
+	s := l.s[l.pos:]
+	for ; n < len(s); n++ {
+		if !l.isAlpha(rune(s[n])) {
+			break
+		}
+	}
+	l.pos += n
+	return s[:n]
+}
+
+func (l *typeLexer) isAlpha(r rune) bool {
+	return '0' <= r && r <= '9' ||
+		'A' <= r && r <= 'Z' ||
+		'a' <= r && r <= 'z' ||
+		r == '_'
 }

@@ -1,3 +1,6 @@
+" @param {Dict} wg
+" @param {Int} index
+" @returns {tInt}
 function! s:_notify_done(wg, index, value) abort
   let a:wg.results[a:index] = a:value
   let a:wg.remaining -= 1

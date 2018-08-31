@@ -544,7 +544,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	buf.WriteString(",")
 	buf.WriteString(strconv.Itoa(pos.Column))
 	buf.WriteString("]")
-	return strings.NewReader(buf.String())
+	return &buf
 }
 
 // writeIdentList writes ident list without "[", "]" .

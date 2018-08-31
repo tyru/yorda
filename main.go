@@ -46,7 +46,7 @@ func yordaMain() int {
 		return 10
 	}
 	// TODO query dumped prolog code to prolog processor
-	fset.Iterate(func(f *analyFile) bool {
+	fset.iterate(func(f *analyFile) bool {
 		r := newConverter(f).toReader(f.node)
 		_, err = io.Copy(os.Stdout, r)
 		fmt.Println()

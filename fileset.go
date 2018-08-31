@@ -24,8 +24,8 @@ func (s *fileSet) addFile(filename string, size int64, node *ast.File) {
 	s.base = base
 }
 
-// File returns *analyFile by filename.
-func (s *fileSet) File(pos ast.Pos) *analyFile {
+// file returns *analyFile by filename.
+func (s *fileSet) file(pos ast.Pos) *analyFile {
 	if s.last != nil && s.last.name == pos.Filename {
 		return s.last
 	}
@@ -41,12 +41,16 @@ func (s *fileSet) File(pos ast.Pos) *analyFile {
 	return nil
 }
 
-func (s *fileSet) Iterate(f func(*analyFile) bool) {
+func (s *fileSet) iterate(f func(*analyFile) bool) {
 	for i := range s.files {
 		if !f(&s.files[i]) {
 			break
 		}
 	}
+}
+
+func (s *fileSet) size() int {
+	return len(s.files)
 }
 
 type analyFile struct {

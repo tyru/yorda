@@ -9,6 +9,7 @@ import (
 type typeID string
 
 const (
+	// NOTE update also "allTypes" in init()!
 	typeUnknown typeID = ""
 	typeAny     typeID = "tAny"
 	typeInt     typeID = "tInt" // In vim script, integer is "Number" but it is ambiguous name.
@@ -24,6 +25,42 @@ const (
 	typeChannel typeID = "tChannel"
 	typeTuple   typeID = "tTuple"
 )
+
+func init() {
+	allTypes := []typeID{
+		typeAny,
+		typeInt,
+		typeString,
+		typeFunc,
+		typeUnion,
+		typeList,
+		typeDict,
+		typeFloat,
+		typeBoolean,
+		typeNone,
+		typeJob,
+		typeChannel,
+		typeTuple,
+	}
+
+	nameToTypeID = make(map[string]typeID, len(allTypes))
+	for _, t := range allTypes {
+		id := t.ID()
+		if id[0] == 't' {
+			nameToTypeID[id[1:]] = t // tInt -> Int
+		}
+		nameToTypeID[id] = t
+	}
+}
+
+var nameToTypeID map[string]typeID
+
+func getTypeID(name string) typeID {
+	if v, ok := nameToTypeID[name]; ok {
+		return v
+	}
+	return typeUnknown
+}
 
 type vimType interface {
 	ID() string
