@@ -12,8 +12,8 @@ import (
 	"github.com/haya14busa/go-vimlparser/token"
 )
 
-func newConverter(nodeDB *nodeDB) *converter {
-	return &converter{indent: "  ", nodeDB: nodeDB}
+func newConverter(f *analyFile) *converter {
+	return &converter{indent: "  ", info: f.info, filename: f.name}
 }
 
 var emptyReader = strings.NewReader("")
@@ -27,9 +27,10 @@ func (r *errorReader) Read([]byte) (int, error) {
 }
 
 type converter struct {
-	depth  int    // for indent
-	indent string // a string per 1 indent
-	nodeDB *nodeDB
+	depth    int    // for indent
+	indent   string // a string per 1 indent
+	info     *fileNodeInfo
+	filename string
 }
 
 func (c *converter) incIndent() {
@@ -47,15 +48,17 @@ func (c *converter) getIndent() string {
 func (c *converter) toReader(node ast.Node) io.Reader {
 	var buf bytes.Buffer
 
-	if typ := c.nodeDB.getType(node); typ != typeUnknown {
+	if typ := c.info.getType(node); typ != typeUnknown {
 		buf.WriteString("(")
 		buf.WriteString(typ.ID())
 		buf.WriteString(")")
 	} else {
 		switch n := node.(type) {
 		case *ast.File:
-			// file([Args...]) @ Pos
+			// file(Filename, [Args...]) @ Pos
 			buf.WriteString("file(")
+			buf.WriteString(quote(c.filename))
+			buf.WriteString(",")
 			if err := c.writeStmtList(&buf, n.Body); err != nil {
 				return &errorReader{err}
 			}

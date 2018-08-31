@@ -8,13 +8,14 @@ import (
 	"github.com/haya14busa/go-vimlparser/ast"
 )
 
-type nodeDB struct {
-	scope   *scope
-	nodeMap nodeMap
+type fileNodeInfo struct {
+	filename string
+	scope    *scope
+	nodeMap  nodeMap
 }
 
-func newNodeDB() *nodeDB {
-	return &nodeDB{newScope(nil), make(nodeMap)}
+func newFileNodeInfo(filename string) *fileNodeInfo {
+	return &fileNodeInfo{filename, newScope(nil), make(nodeMap)}
 }
 
 type identInfo struct {
@@ -25,12 +26,12 @@ type identInfo struct {
 }
 
 // setLHS is called when ast.Let or ast.For is found.
-func (db *nodeDB) setLHS(left ast.Expr, list []ast.Expr, rest ast.Expr) error {
+func (db *fileNodeInfo) setLHS(left ast.Expr, list []ast.Expr, rest ast.Expr) error {
 	if left != nil {
 		if id, ok := left.(*ast.Ident); ok {
 			typ := newTypeVar()
 			kind := kindVarname
-			cname, err := db.newCNameByName(id, id.Name, kind.isFunc())
+			cname, err := db.newCNameByName(id, id.Name, false)
 			if err != nil {
 				return err
 			}
@@ -52,7 +53,7 @@ func (db *nodeDB) setLHS(left ast.Expr, list []ast.Expr, rest ast.Expr) error {
 	return nil
 }
 
-func (db *nodeDB) setFuncParams(params []*ast.Ident) error {
+func (db *fileNodeInfo) setFuncParams(params []*ast.Ident) error {
 	for i, id := range params {
 		// TODO get argument type from comment before function node
 		typ := newTypeVar()
@@ -86,7 +87,7 @@ func (db *nodeDB) setFuncParams(params []*ast.Ident) error {
 // TODO (SSA) Add version to:
 // * local variable name in a function
 // * global variable name in a toplevel
-func (db *nodeDB) newCNameByName(id *ast.Ident, name string, isFunc bool) (cname *CName, err error) {
+func (db *fileNodeInfo) newCNameByName(id *ast.Ident, name string, isFunc bool) (cname *CName, err error) {
 	if name == "" {
 		typ := "variable"
 		if isFunc {
@@ -117,7 +118,7 @@ func (db *nodeDB) newCNameByName(id *ast.Ident, name string, isFunc bool) (cname
 			// :help E128
 			return nil, errorf(id, "function name must start with a capital or 's:': %s", name)
 		}
-		return newCName(scope, name), nil
+		return newCName(scope, name, db.filename), nil
 	}
 
 	scope, name := splitVimVar(name)
@@ -128,10 +129,10 @@ func (db *nodeDB) newCNameByName(id *ast.Ident, name string, isFunc bool) (cname
 			scope = "l"
 		}
 	}
-	return newCName(scope, name), nil
+	return newCName(scope, name, db.filename), nil
 }
 
-// searchTarget changes the behavior of nodeDB.lookUpIdentInfo().
+// searchTarget changes the behavior of fileNodeInfo.lookUpIdentInfo().
 //
 //	db.lookUpIdentInfo(id, stFunc)    // search the function
 //	db.lookUpIdentInfo(id, stVar)    // search the variable
@@ -149,7 +150,7 @@ const (
 // If id is a known node, return the information.
 // Otherwise it tries to look up a function (isFunc == true) or
 // a variable (isFunc == false) from database.
-func (db *nodeDB) lookUpIdentInfo(id *ast.Ident, target searchTarget) (info *identInfo, err error) {
+func (db *fileNodeInfo) lookUpIdentInfo(id *ast.Ident, target searchTarget) (info *identInfo, err error) {
 	list := make([]bool, 0, 2)
 	if target&stFunc != 0 {
 		list = append(list, true)
@@ -221,7 +222,7 @@ func (db *nodeDB) lookUpIdentInfo(id *ast.Ident, target searchTarget) (info *ide
 	return info, nil
 }
 
-func (db *nodeDB) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *CName) *identInfo {
+func (db *fileNodeInfo) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *CName) *identInfo {
 	if cname == nil {
 		return nil
 	}
@@ -243,22 +244,22 @@ func (db *nodeDB) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *CName) 
 // * setIdentInfo adds niIdentKind entry to nodeInfo.
 // * setIdentInfo adds niVimType entry to nodeInfo.
 // If the variable/function is added already, overwrites previous node kind.
-func (db *nodeDB) setIdentInfo(info identInfo) {
+func (db *fileNodeInfo) setIdentInfo(info identInfo) {
 	db.setCanonName(info.ident, info.cname)
 	db.setKind(info.ident, info.kind)
 	db.setType(info.ident, info.typ)
 }
 
-func (db *nodeDB) knownNode(node ast.Node) bool {
+func (db *fileNodeInfo) knownNode(node ast.Node) bool {
 	return db.getKind(node) != kindUnknown
 }
 
-func (db *nodeDB) setCanonName(node ast.Node, cname *CName) {
+func (db *fileNodeInfo) setCanonName(node ast.Node, cname *CName) {
 	info := db.nodeMap.get(node)
 	info[niCanonName] = cname
 }
 
-func (db *nodeDB) getCanonName(node ast.Node) *CName {
+func (db *fileNodeInfo) getCanonName(node ast.Node) *CName {
 	info := db.nodeMap.get(node)
 	if info[niCanonName] != nil {
 		if cname, ok := info[niCanonName].(*CName); ok {
@@ -268,12 +269,12 @@ func (db *nodeDB) getCanonName(node ast.Node) *CName {
 	return nil
 }
 
-func (db *nodeDB) setKind(node ast.Node, kind nodeKind) {
+func (db *fileNodeInfo) setKind(node ast.Node, kind nodeKind) {
 	info := db.nodeMap.get(node)
 	info[niIdentKind] = &kind
 }
 
-func (db *nodeDB) getKind(node ast.Node) nodeKind {
+func (db *fileNodeInfo) getKind(node ast.Node) nodeKind {
 	info := db.nodeMap.get(node)
 	if info[niIdentKind] != nil {
 		if v, ok := info[niIdentKind].(*nodeKind); ok {
@@ -283,12 +284,12 @@ func (db *nodeDB) getKind(node ast.Node) nodeKind {
 	return kindUnknown
 }
 
-func (db *nodeDB) setType(node ast.Node, typ vimType) {
+func (db *fileNodeInfo) setType(node ast.Node, typ vimType) {
 	info := db.nodeMap.get(node)
 	info[niVimType] = typ
 }
 
-func (db *nodeDB) getType(node ast.Node) vimType {
+func (db *fileNodeInfo) getType(node ast.Node) vimType {
 	info := db.nodeMap.get(node)
 	if info[niVimType] != nil {
 		if v, ok := info[niVimType].(vimType); ok {
@@ -298,11 +299,11 @@ func (db *nodeDB) getType(node ast.Node) vimType {
 	return typeUnknown
 }
 
-func (db *nodeDB) pushScope() {
+func (db *fileNodeInfo) pushScope() {
 	db.scope = newScope(db.scope)
 }
 
-func (db *nodeDB) popScope() {
+func (db *fileNodeInfo) popScope() {
 	db.scope = db.scope.outer
 }
 
@@ -345,27 +346,31 @@ const (
 	kindProp             // property access
 )
 
-func (kind nodeKind) isFunc() bool {
-	return kind == kindFunDecl || kind == kindFunCall
-}
-
-// CName is a FQDN string which points to the single identifier (variable or function).
-// Format is (scope is one of "l", "a"):
+// CName is a FQDN string (cname.String()) which points to
+// the single identifier (variable or function).
+//
+// scope is "s", "l" or "a":
+//
+//	{filename}:{scope}:{varname}
+//
+// scope is "b:", "w:", "t:", "g:" or "v:":
 //
 //	{scope}:{varname}
 //
-// TODO: Currently no cname information for the scopes of "b:", "w:", "t:", "g:", "s:", "v:".
-//
 type CName struct {
-	scope   string
-	varname string
+	scope    string
+	varname  string
+	filename string
 }
 
-func newCName(scope, varname string) *CName {
-	return &CName{scope, varname}
+func newCName(scope, varname, filename string) *CName {
+	return &CName{scope, varname, filename}
 }
 
 func (cn *CName) String() string {
+	if cn.scope == "l" || cn.scope == "a" || cn.scope == "s" {
+		return fmt.Sprintf("%s:%s:%s", cn.filename, cn.scope, cn.varname)
+	}
 	return fmt.Sprintf("%s:%s", cn.scope, cn.varname)
 }
 

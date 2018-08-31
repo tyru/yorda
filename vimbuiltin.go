@@ -1845,7 +1845,7 @@ func getVimVarCName(name string) *CName {
 	if !isVimVar(scope, name) {
 		return nil
 	}
-	return newCName(scope, name)
+	return newCName(scope, name, "")
 }
 
 func getVimVarType(cname *CName) vimType {
@@ -1935,7 +1935,7 @@ func getVimFuncCName(name string) *CName {
 	if !isVimFunc(name) {
 		return nil
 	}
-	return newCName("vimfunc", name)
+	return newCName("vimfunc", name, "")
 }
 
 func getVimFuncType(cname *CName) vimType {

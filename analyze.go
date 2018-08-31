@@ -7,96 +7,38 @@ import (
 	"github.com/haya14busa/go-vimlparser/token"
 )
 
-type fileSet struct {
-	files []analyFile
-	last  *analyFile
-	base  int64
-}
-
-func newFileSet(cap int) *fileSet {
-	return &fileSet{
-		files: make([]analyFile, 0, cap),
-		base:  1, // 0 == NoPos
-	}
-}
-
-// addFile adds given file to this file set.
-// addFile returns non-nil error when given filename is already in the file set.
-func (s *fileSet) addFile(filename string, size int64, node *ast.File) {
-	base := s.base + size + 1 // +1 because EOF also has a position
-	f := analyFile{s.base, size, filename, node}
-	s.files = append(s.files, f)
-	s.base = base
-}
-
-// File returns *analyFile by filename.
-func (s *fileSet) File(pos ast.Pos) *analyFile {
-	if s.last != nil && s.last.name == pos.Filename {
-		return s.last
-	}
-	if pos.Filename == "" {
-		return nil
-	}
-	for i := range s.files {
-		if s.files[i].name == pos.Filename {
-			s.last = &s.files[i]
-			return &s.files[i]
-		}
-	}
-	return nil
-}
-
-func (s *fileSet) Iterate(f func(*analyFile) bool) {
-	for i := range s.files {
-		if !f(&s.files[i]) {
-			break
-		}
-	}
-}
-
-type analyFile struct {
-	base     int64
-	size     int64
-	name     string
-	fileNode *ast.File
-}
-
-type setPos int64 // noPos == 0
-
-func (f *analyFile) toSetPos() setPos {
-	return setPos(f.base + f.size)
-}
-
 func newAnalyzer(fset *fileSet) *analyzer {
-	return &analyzer{fset, newNodeDB()}
+	return &analyzer{fset}
 }
 
 type analyzer struct {
-	fset   *fileSet
-	nodeDB *nodeDB
+	fset *fileSet
 }
 
 // run infers the types of file set.
 func (a *analyzer) run() error {
 	var err error
 	a.fset.Iterate(func(f *analyFile) bool {
-		err = a.addNodeInfo(f.fileNode)
+		if f.info == nil {
+			f.info = newFileNodeInfo(f.name)
+		}
+		err = a.addNodeInfo(f)
 		return err == nil
 	})
 	return err
 }
 
-func (a *analyzer) addNodeInfo(node *ast.File) error {
-	v := &nodeInfoVisitor{nodeDB: a.nodeDB}
-	ast.Walk(v, node)
+func (a *analyzer) addNodeInfo(f *analyFile) error {
+	v := &nodeInfoVisitor{info: f.info}
+	ast.Walk(v, f.node)
 	return v.err
 }
 
 // nodeInfoVisitor visits nodes and adds some information in nodeInfo.
 // See nodeInfoKey for details.
 type nodeInfoVisitor struct {
-	nodeDB *nodeDB
-	err    error
+	info *fileNodeInfo
+	err  error
 }
 
 // ast.BasicLit:
@@ -120,7 +62,7 @@ type nodeInfoVisitor struct {
 //   * kind = <existing variable/function>.kind
 // * If the node is *ast.Function, determine the type of function.
 func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
-	if node == nil || v.nodeDB.knownNode(node) {
+	if node == nil || v.info.knownNode(node) {
 		return v
 	}
 	switch n := node.(type) {
@@ -141,26 +83,26 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 		typ := newFuncType(newTupleType(argsTypes...), newTypeVar())
 		if id, ok := n.Name.(*ast.Ident); ok {
 			kind := kindFunDecl
-			cname, err := v.nodeDB.newCNameByName(id, id.Name, true)
+			cname, err := v.info.newCNameByName(id, id.Name, true)
 			if err != nil {
 				v.err = err
 				return nil
 			}
 			info := identInfo{id, cname, kind, typ}
-			v.nodeDB.setIdentInfo(info)
+			v.info.setIdentInfo(info)
 		} else {
 			// TODO support method: obj.func()
 			// TODO support curly-braces-names ?
 		}
 		// Add parameter identifiers to inner scope.
-		v.nodeDB.pushScope()
-		v.err = v.nodeDB.setFuncParams(n.Params)
+		v.info.pushScope()
+		v.err = v.info.setFuncParams(n.Params)
 		if v.err != nil {
 			return nil
 		}
 
 	case *ast.EndFunction:
-		v.nodeDB.popScope()
+		v.info.popScope()
 
 	case *ast.DelFunction:
 
@@ -169,7 +111,7 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.ExCall:
 
 	case *ast.Let:
-		v.err = v.nodeDB.setLHS(n.Left, n.List, n.Rest)
+		v.err = v.info.setLHS(n.Left, n.List, n.Rest)
 		if v.err != nil {
 			return nil
 		}
@@ -197,7 +139,7 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.EndWhile:
 
 	case *ast.For:
-		v.err = v.nodeDB.setLHS(n.Left, n.List, n.Rest)
+		v.err = v.info.setLHS(n.Left, n.List, n.Rest)
 		if v.err != nil {
 			return nil
 		}
@@ -249,14 +191,14 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 			}
 			// Set ident information of the left-most identifier.
 			if id, ok := n.(*ast.Ident); ok {
-				info, err := v.nodeDB.lookUpIdentInfo(id, stFunc+stFromScope)
+				info, err := v.info.lookUpIdentInfo(id, stFunc+stFromScope)
 				if err != nil {
 					v.err = err
 					return false
 				}
 				// Change kind to kindFunCall
 				newInfo := identInfo{id, info.cname, kindFunCall, info.typ}
-				v.nodeDB.setIdentInfo(newInfo)
+				v.info.setIdentInfo(newInfo)
 				return true
 			}
 			return true
@@ -268,45 +210,45 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.DotExpr:
 		// TODO check variable in n.Left
 		// FIXME kindProp.isFunc() returns false, but obj.prop may be a function!
-		v.nodeDB.setKind(n.Right, kindProp)
+		v.info.setKind(n.Right, kindProp)
 
 	case *ast.BasicLit:
 		switch n.Kind {
 		case token.NUMBER:
-			v.nodeDB.setType(n, typeInt)
-			v.nodeDB.setKind(n, kindLiteral)
+			v.info.setType(n, typeInt)
+			v.info.setKind(n, kindLiteral)
 		case token.STRING:
-			v.nodeDB.setType(n, typeString)
-			v.nodeDB.setKind(n, kindLiteral)
+			v.info.setType(n, typeString)
+			v.info.setKind(n, kindLiteral)
 		case token.OPTION:
-			v.nodeDB.setType(n, getTypeOfVimOption(n.Value))
-			v.nodeDB.setKind(n, kindLiteral)
+			v.info.setType(n, getTypeOfVimOption(n.Value))
+			v.info.setKind(n, kindLiteral)
 		case token.ENV:
-			v.nodeDB.setType(n, typeString)
-			v.nodeDB.setKind(n, kindLiteral)
+			v.info.setType(n, typeString)
+			v.info.setKind(n, kindLiteral)
 		case token.REG:
-			v.nodeDB.setType(n, typeString)
-			v.nodeDB.setKind(n, kindLiteral)
+			v.info.setType(n, typeString)
+			v.info.setKind(n, kindLiteral)
 		}
 
 	case *ast.List:
-		v.nodeDB.setType(n, typeList)
-		v.nodeDB.setKind(n, kindLiteral)
+		v.info.setType(n, typeList)
+		v.info.setKind(n, kindLiteral)
 
 	case *ast.Dict:
-		v.nodeDB.setType(n, typeDict)
-		v.nodeDB.setKind(n, kindLiteral)
+		v.info.setType(n, typeDict)
+		v.info.setKind(n, kindLiteral)
 
 	case *ast.Ident:
 		// Check unmarked identifier nodes.
 		// It must be refering to a existing variable or a function.
-		info, err := v.nodeDB.lookUpIdentInfo(n, stFunc+stVar+stFromScope)
+		info, err := v.info.lookUpIdentInfo(n, stFunc+stVar+stFromScope)
 		if err != nil {
 			v.err = wrapError(err, n, "could not look up the identifier")
 			return nil
 		}
-		if !v.nodeDB.knownNode(n) {
-			v.nodeDB.setIdentInfo(*info)
+		if !v.info.knownNode(n) {
+			v.info.setIdentInfo(*info)
 		}
 
 	case *ast.CurlyName:
@@ -322,8 +264,8 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 			argsTypes[i] = newTypeVar()
 		}
 		typ := newFuncType(newTupleType(argsTypes...), newTypeVar())
-		v.nodeDB.setType(n, typ)
-		v.nodeDB.setKind(n, kindLiteral)
+		v.info.setType(n, typ)
+		v.info.setKind(n, kindLiteral)
 
 	case *ast.ParenExpr:
 
@@ -334,7 +276,7 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 }
 
 // checkRefIdents checks identifiers of rhs.
-// checkRefIdents marks node as read, by calling nodeDB.setKind().
+// checkRefIdents marks node as read, by calling fileNodeInfo.setKind().
 func (v *nodeInfoVisitor) checkRefIdents(node ast.Node) error {
 	var err error
 	ast.Inspect(node, func(n ast.Node) bool {

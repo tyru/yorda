@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // the ID of primitive type
@@ -33,14 +31,6 @@ type vimType interface {
 
 func (t typeID) ID() string {
 	return string(t)
-}
-
-type typeBad struct {
-	error
-}
-
-func (t *typeBad) ID() string {
-	return fmt.Sprintf("<bad type: %s>", t.Error())
 }
 
 type vimTypeVar struct {
@@ -172,7 +162,7 @@ func newUnionType(a, b vimType, types ...vimType) vimType {
 // TODO check len(<args types>) <= 20 (Vim script's max number of arguments) ?
 func newFuncType(argsType, retType vimType) vimType {
 	if !isTupleType(argsType) {
-		return &typeBad{errors.Errorf("newFuncType received invalid arguments type: %+v", argsType)}
+		panic(fmt.Sprintf("newFuncType received invalid arguments type: %+v", argsType))
 	}
 	return &composeType{typeFunc, &composeType{argsType, retType}}
 }
