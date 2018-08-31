@@ -58,12 +58,12 @@ func newTypeVar() *vimTypeVar {
 	return &vimTypeVar{typeVarCount}
 }
 
-type applyType struct {
+type composeType struct {
 	left  vimType
 	right vimType
 }
 
-func (t *applyType) ID() string {
+func (t *composeType) ID() string {
 	switch t.left {
 	case typeTuple:
 		list := stringifyTupleType(t)
@@ -92,11 +92,11 @@ func stringifyTupleType(t vimType) string {
 	if t == typeTuple { // 0 elements
 		return "[]"
 	}
-	apt, ok := t.(*applyType)
+	apt, ok := t.(*composeType)
 	if !ok || apt.left != typeTuple {
 		return ""
 	}
-	right, ok := apt.right.(*applyType)
+	right, ok := apt.right.(*composeType)
 	if !ok { // 1 element
 		return fmt.Sprintf("[%s]", apt.right.ID())
 	}
@@ -104,7 +104,7 @@ func stringifyTupleType(t vimType) string {
 	list := make([]string, 0, 20)
 	for {
 		list = append(list, apt.left.ID())
-		right, ok := apt.right.(*applyType)
+		right, ok := apt.right.(*composeType)
 		if !ok {
 			list = append(list, apt.right.ID())
 			break
@@ -114,12 +114,8 @@ func stringifyTupleType(t vimType) string {
 	return fmt.Sprintf("[%s]", strings.Join(list, ", "))
 }
 
-func stringifyFuncType(t *applyType) string {
-	apt := t.right.(*applyType)
-	fmt.Printf("t = %+v (%T)\n", t, t)
-	fmt.Printf("apt = %+v (%T)\n", apt, apt)
-	fmt.Printf("apt.left = %+v (%T)\n", apt.left, apt.left)
-	fmt.Printf("apt.right = %+v (%T)\n", apt.right, apt.right)
+func stringifyFuncType(t *composeType) string {
+	apt := t.right.(*composeType)
 	args := stringifyTupleType(apt.left)
 	if args == "" {
 		return ""
@@ -127,13 +123,13 @@ func stringifyFuncType(t *applyType) string {
 	return fmt.Sprintf("%s -> %s", args, apt.right.ID())
 }
 
-func stringifyUnionType(t *applyType) string {
-	apt := t.right.(*applyType)
+func stringifyUnionType(t *composeType) string {
+	apt := t.right.(*composeType)
 	list := make([]string, 0, 2)
 	if apt.left != typeUnion {
 		list = append(list, apt.left.ID())
 	}
-	if right, ok := apt.right.(*applyType); ok {
+	if right, ok := apt.right.(*composeType); ok {
 		list = append(list, stringifyUnionType(right))
 	}
 	return strings.Join(list, " | ")
@@ -145,29 +141,29 @@ func newTupleType(types ...vimType) vimType {
 	case 0:
 		return typeTuple
 	case 1:
-		return &applyType{typeTuple, types[0]}
+		return &composeType{typeTuple, types[0]}
 	case 2:
 		a, b := types[0], types[1]
-		return &applyType{typeTuple, &applyType{a, b}}
+		return &composeType{typeTuple, &composeType{a, b}}
 	default:
 		a, b, types := types[0], types[1], types[2:]
-		return &applyType{typeTuple, newTupleTypeInner(a, b, types...)}
+		return &composeType{typeTuple, newTupleTypeInner(a, b, types...)}
 	}
 }
 
 func newTupleTypeInner(a, b vimType, types ...vimType) vimType {
 	if len(types) == 0 {
-		return &applyType{a, b}
+		return &composeType{a, b}
 	}
-	return &applyType{a, newTupleTypeInner(b, types[0], types[1:]...)}
+	return &composeType{a, newTupleTypeInner(b, types[0], types[1:]...)}
 }
 
 // newUnionType returns union type.
 func newUnionType(a, b vimType, types ...vimType) vimType {
 	if len(types) == 0 {
-		return &applyType{typeUnion, &applyType{a, b}}
+		return &composeType{typeUnion, &composeType{a, b}}
 	}
-	return &applyType{typeUnion, &applyType{a, newUnionType(b, types[0], types[1:]...)}}
+	return &composeType{typeUnion, &composeType{a, newUnionType(b, types[0], types[1:]...)}}
 }
 
 // newFuncType returns function type.
@@ -178,5 +174,5 @@ func newFuncType(argsType, retType vimType) vimType {
 	if !isTupleType(argsType) {
 		return &typeBad{errors.Errorf("newFuncType received invalid arguments type: %+v", argsType)}
 	}
-	return &applyType{typeFunc, &applyType{argsType, retType}}
+	return &composeType{typeFunc, &composeType{argsType, retType}}
 }

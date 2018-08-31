@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"unicode"
 
 	"github.com/haya14busa/go-vimlparser/ast"
@@ -24,42 +25,74 @@ type identInfo struct {
 }
 
 // setLHS is called when ast.Let or ast.For is found.
-func (db *nodeDB) setLHS(left ast.Expr, list []ast.Expr, rest ast.Expr) {
+func (db *nodeDB) setLHS(left ast.Expr, list []ast.Expr, rest ast.Expr) error {
 	if left != nil {
 		if id, ok := left.(*ast.Ident); ok {
 			typ := newTypeVar()
 			kind := kindVarname
-			cname := db.newCNameByName(id.Name, kind.isFunc())
+			cname, err := db.newCNameByName(id, id.Name, kind.isFunc())
+			if err != nil {
+				return err
+			}
 			info := identInfo{id, cname, kind, typ}
+			db.scope.set(info.cname, info.ident)
 			db.setIdentInfo(info)
 		}
 	}
 	for i := range list {
-		db.setLHS(list[i], nil, nil)
+		if err := db.setLHS(list[i], nil, nil); err != nil {
+			return err
+		}
 	}
 	if rest != nil {
-		db.setLHS(rest, nil, nil)
+		if err := db.setLHS(rest, nil, nil); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (db *nodeDB) setFuncParams(params []*ast.Ident) {
-	for _, id := range params {
+func (db *nodeDB) setFuncParams(params []*ast.Ident) error {
+	for i, id := range params {
 		// TODO get argument type from comment before function node
-		typ := typeAny
+		typ := newTypeVar()
 		kind := kindVarname
-		cname := db.newCNameByName("a:"+id.Name, false)
+		// a:name
+		cname, err := db.newCNameByName(id, "a:"+id.Name, false)
+		if err != nil {
+			return err
+		}
 		info := identInfo{id, cname, kind, typ}
+		db.scope.set(info.cname, info.ident)
+		db.setIdentInfo(info)
+		// a:1, a:2, ...
+		cname, err = db.newCNameByName(id, "a:"+strconv.Itoa(i+1), false)
+		if err != nil {
+			return err
+		}
+		info = identInfo{id, cname, kind, typ}
+		db.scope.set(info.cname, info.ident)
 		db.setIdentInfo(info)
 	}
+	return nil
 }
 
 // newCNameByName converts given non-canonical name to canonical name.
+// It returns non-nil error for:
+// * Invalid name (name == "")
+// * No built-in function (name == "hoge" && isFunc == true)
+// * function name must start with a capital or 's:'
+//
 // TODO (SSA) Add version to:
 // * local variable name in a function
 // * global variable name in a toplevel
-func (db *nodeDB) newCNameByName(name string, isFunc bool) (cname *CName) {
+func (db *nodeDB) newCNameByName(id *ast.Ident, name string, isFunc bool) (cname *CName, err error) {
 	if name == "" {
-		return nil
+		typ := "variable"
+		if isFunc {
+			typ = "function"
+		}
+		return nil, errorf(id, "invalid %s name: %s", typ, name)
 	}
 
 	if isFunc {
@@ -68,12 +101,11 @@ func (db *nodeDB) newCNameByName(name string, isFunc bool) (cname *CName) {
 		if noScope { // No scope. is it a vim built-in function?
 			cname = getVimFuncCName(name)
 			if cname != nil {
-				return cname
+				return cname, nil
 			}
 			// Otherwise, it is an error.
-			return nil
+			return nil, errorf(id, "no such built-in function: %s", name)
 		}
-		// E128: Function name must start with a capital or "s:"
 		var scope string
 		switch {
 		case name[0] <= unicode.MaxASCII && unicode.IsUpper(rune(name[0])):
@@ -82,9 +114,10 @@ func (db *nodeDB) newCNameByName(name string, isFunc bool) (cname *CName) {
 			scope = "s"
 			name = name[2:]
 		default:
-			return nil
+			// :help E128
+			return nil, errorf(id, "function name must start with a capital or 's:': %s", name)
 		}
-		return newCName(scope, name)
+		return newCName(scope, name), nil
 	}
 
 	scope, name := splitVimVar(name)
@@ -95,45 +128,97 @@ func (db *nodeDB) newCNameByName(name string, isFunc bool) (cname *CName) {
 			scope = "l"
 		}
 	}
-	return newCName(scope, name)
+	return newCName(scope, name), nil
 }
+
+// searchTarget changes the behavior of nodeDB.lookUpIdentInfo().
+//
+//	db.lookUpIdentInfo(id, stFunc)    // search the function
+//	db.lookUpIdentInfo(id, stVar)    // search the variable
+//	db.lookUpIdentInfo(id, stFunc+stVar)    // search the function or the variable
+//	db.lookUpIdentInfo(id, stFunc+stFromScope)    // search the function from scope
+//
+type searchTarget int
+
+const (
+	stVar searchTarget = 1 << iota
+	stFunc
+	stFromScope
+)
 
 // If id is a known node, return the information.
 // Otherwise it tries to look up a function (isFunc == true) or
 // a variable (isFunc == false) from database.
-func (db *nodeDB) getIdentInfo(id *ast.Ident, isFunc bool) *identInfo {
+func (db *nodeDB) lookUpIdentInfo(id *ast.Ident, target searchTarget) (info *identInfo, err error) {
+	list := make([]bool, 0, 2)
+	if target&stFunc != 0 {
+		list = append(list, true)
+	}
+	if target&stVar != 0 {
+		list = append(list, false)
+	}
+
 	if db.knownNode(id) {
 		kind := db.getKind(id)
-		cname := db.newCNameByName(id.Name, kind.isFunc())
-		info := db.getBuiltinIdentInfo(id, isFunc, cname)
-		if info != nil {
-			return info
+		if kind == kindUnknown {
+			panic(errorf(id, "fatal: node is known but no kind?: node (%T) = %+v", id, id).Error())
 		}
-		return &identInfo{id, cname, kind, db.getType(id)}
+		cname := db.getCanonName(id)
+		if kind != kindProp && cname == nil {
+			panic(errorf(id, "fatal: node is known but no cname?: node (%T) = %+v", id, id).Error())
+		}
+		for _, isFunc := range list {
+			info = db.getBuiltinIdentInfo(id, isFunc, cname)
+			if info != nil {
+				return info, nil
+			}
+		}
+		info = &identInfo{id, cname, db.getKind(id), db.getType(id)}
+		return info, nil
 	}
 
-	cname := db.newCNameByName(id.Name, isFunc)
-	if cname == nil {
-		return nil
+	if target&stFromScope == 0 {
+		return nil, errorf(id, "the node is not known node: %s", id.Name)
 	}
 
-	info := db.getBuiltinIdentInfo(id, isFunc, cname)
-	if info != nil {
-		return info
+	var cname *CName
+	for _, isFunc := range list {
+		cname, err = db.newCNameByName(id, id.Name, isFunc)
+		if err != nil {
+			continue
+		}
+		info = db.getBuiltinIdentInfo(id, isFunc, cname)
+		if info != nil {
+			return info, nil
+		}
+		err = nil
+		break
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if cname.scope == "l" || cname.scope == "a" {
 		node, scope := db.scope.lookup(cname)
 		if scope != nil {
-			return &identInfo{id, cname, db.getKind(node), db.getType(node)}
+			typ := db.getType(node)
+			if typ == typeUnknown {
+				panic(errorf(id, "node's type is unknown\n").Error())
+			}
+			kind := db.getKind(node)
+			if kind == kindUnknown {
+				panic(errorf(id, "node's kind is unknown\n").Error())
+			}
+			info = &identInfo{id, cname, kind, typ}
+			return info, nil
 		}
-	} else {
-		// Other scope variables are defined somewhere...
-		// FIXME what should I do? ('_'
-		return &identInfo{id, cname, kindVarname, typeAny}
+		return nil, errorf(id, "unresolved reference %s", id.Name)
 	}
 
-	return nil
+	// Other scope variables are defined somewhere...
+	// TODO load plugin/*.vim before other *.vim files?
+	info = &identInfo{id, cname, kindVarname, newTypeVar()}
+	return info, nil
 }
 
 func (db *nodeDB) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *CName) *identInfo {
@@ -145,21 +230,20 @@ func (db *nodeDB) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *CName) 
 			return &identInfo{id, cname, kindFunCall, getVimFuncType(cname)}
 		}
 	} else {
-		if cname.scope == "v" {
-			return &identInfo{id, cname, kindVarname, getVimVarType(cname)}
+		if isVimVar(cname.scope, cname.varname) {
+			return &identInfo{id, cname, kindVarname, newTypeVar()}
 		}
 	}
 	return nil
 }
 
 // setIdentInfo sets given identifier information to node database.
-// * Adds the identifier to the current scope.
-// * Adds niCanonName entry to nodeInfo.
-// * Adds niIdentKind entry to nodeInfo.
-// * Adds niVimType entry to nodeInfo.
+// * setIdentInfo *DOESN'T* add the identifier to the current scope.
+// * setIdentInfo adds niCanonName entry to nodeInfo.
+// * setIdentInfo adds niIdentKind entry to nodeInfo.
+// * setIdentInfo adds niVimType entry to nodeInfo.
 // If the variable/function is added already, overwrites previous node kind.
 func (db *nodeDB) setIdentInfo(info identInfo) {
-	db.scope.set(info.cname, info.ident)
 	db.setCanonName(info.ident, info.cname)
 	db.setKind(info.ident, info.kind)
 	db.setType(info.ident, info.typ)
@@ -225,12 +309,6 @@ func (db *nodeDB) popScope() {
 type nodeInfo map[nodeInfoKey]interface{}
 type nodeMap map[ast.Node]nodeInfo
 
-// has checks only the entry is non-nil or not.
-// Empty entries must not exist.
-func (m nodeMap) has(node ast.Node) bool {
-	return m[node] != nil
-}
-
 func (m nodeMap) get(node ast.Node) nodeInfo {
 	info := m[node]
 	if info == nil {
@@ -293,18 +371,18 @@ func (cn *CName) String() string {
 
 type scope struct {
 	outer *scope
-	nodes map[string]ast.Node
+	nodes map[string]*ast.Ident
 }
 
 func newScope(outer *scope) *scope {
-	return &scope{outer, make(map[string]ast.Node)}
+	return &scope{outer, make(map[string]*ast.Ident)}
 }
 
-func (s *scope) set(cname *CName, node ast.Node) {
+func (s *scope) set(cname *CName, node *ast.Ident) {
 	s.nodes[cname.String()] = node
 }
 
-func (s *scope) get(cname *CName) (node ast.Node, exists bool) {
+func (s *scope) get(cname *CName) (node *ast.Ident, exists bool) {
 	if cname == nil {
 		return
 	}
@@ -313,7 +391,7 @@ func (s *scope) get(cname *CName) (node ast.Node, exists bool) {
 }
 
 // lookup returns non-nil node and scope if it is found.
-func (s *scope) lookup(cname *CName) (ast.Node, *scope) {
+func (s *scope) lookup(cname *CName) (*ast.Ident, *scope) {
 	if cname == nil {
 		return nil, nil
 	}

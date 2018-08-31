@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -9,43 +10,51 @@ import (
 )
 
 func main() {
-	os.Exit(vainMain())
+	os.Exit(yordaMain())
 }
 
-func vainMain() int {
+func yordaMain() int {
 	filenames, err := walkFiles(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
 		return 1
 	}
 	fset := newFileSet(len(filenames))
 	for _, name := range filenames {
 		r, err := os.Open(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %+v\n", name, err)
+			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
 			return 2
 		}
 		fi, err := r.Stat()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %+v\n", name, err)
+			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
 			return 3
 		}
 		file, err := vimlparser.ParseFile(r, name, nil)
 		r.Close()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %+v\n", name, err)
+			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
 			return 4
 		}
-		err = fset.AddFile(name, fi.Size(), file)
-		if err != nil { // it must not occur (duplicate files)
-			fmt.Fprintf(os.Stderr, "fatal: %+v\n", err)
-			return 5
-		}
+		fset.addFile(name, fi.Size(), file)
 	}
-	err = analyze(fset)
+	analyzer := newAnalyzer(fset)
+	err = analyzer.run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%+v\n", err)
-		return 6
+		fmt.Fprintln(os.Stderr, strerror(err))
+		return 10
+	}
+	// TODO query dumped prolog code to prolog processor
+	converter := newConverter(analyzer.nodeDB)
+	fset.Iterate(func(f *analyFile) bool {
+		_, err = io.Copy(os.Stdout, converter.toReader(f.fileNode))
+		fmt.Println()
+		return err == nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, strerror(err))
+		return 20
 	}
 	return 0
 }
@@ -64,4 +73,11 @@ func walkFiles(args []string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+func strerror(err error) string {
+	if os.Getenv("YORDA_DEBUG") != "" {
+		return fmt.Sprintf("%+v", err) // with stacktrace
+	}
+	return err.Error()
 }

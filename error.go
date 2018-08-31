@@ -13,3 +13,7 @@ func errorf(node ast.Node, format string, args ...interface{}) error {
 	newargs = append(newargs, args...)
 	return errors.Errorf(format, newargs...)
 }
+
+func wrapError(err error, node ast.Node, format string, args ...interface{}) error {
+	return errors.Wrap(err, errorf(node, format, args...).Error())
+}
