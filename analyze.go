@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/haya14busa/go-vimlparser/ast"
 	"github.com/haya14busa/go-vimlparser/token"
@@ -30,7 +31,7 @@ func (a *analyzer) run() error {
 }
 
 func (a *analyzer) addNodeInfo(f *analyFile) error {
-	v := &nodeInfoVisitor{info: f.info}
+	v := &nodeInfoVisitor{info: f.info, prevComments: make([]string, 0, 32)}
 	ast.Walk(v, f.node)
 	return v.err
 }
@@ -38,9 +39,9 @@ func (a *analyzer) addNodeInfo(f *analyFile) error {
 // nodeInfoVisitor visits nodes and adds some information in nodeInfo.
 // See nodeInfoKey for details.
 type nodeInfoVisitor struct {
-	info        *fileNodeInfo
-	err         error
-	prevComment string
+	info         *fileNodeInfo
+	err          error
+	prevComments []string
 }
 
 // ast.BasicLit:
@@ -82,13 +83,13 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 		// Get return type from comment before function node
 		// if the previous node was comment node.
 		var typ vimType
-		if v.prevComment != "" {
-			typ = v.getFuncTypeFromComment(v.prevComment, n)
+		if len(v.prevComments) > 0 {
+			typ = v.getFuncTypeFromComment(v.prevComments, n)
 			if typ == nil {
-				typ = v.getTypeOfFunction(n)
+				typ = v.getTypeOfFunction(n.Params)
 			}
 		} else {
-			typ = v.getTypeOfFunction(n)
+			typ = v.getTypeOfFunction(n.Params)
 		}
 		if id, ok := n.Name.(*ast.Ident); ok {
 			kind := kindFunDecl
@@ -267,12 +268,9 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.CurlyNameExpr:
 
 	case *ast.LambdaExpr:
-		// TODO get return type from comment before lambda node
-		argsTypes := make([]vimType, len(n.Params))
-		for i := range argsTypes {
-			argsTypes[i] = newTypeVar()
-		}
-		typ := newFuncType(newTupleType(argsTypes...), newTypeVar())
+		// TODO get return type from comment, which is before the statement node
+		// which lambda belongs to.
+		typ := v.getTypeOfFunction(n.Params)
 		v.info.setType(n, typ)
 		v.info.setKind(n, kindLiteral)
 
@@ -282,14 +280,11 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 		panic(fmt.Sprintf("nodeInfoVisitor.Visit(): unexpected node type %T", n))
 	}
 
-	// Merge multiple comments into comment group.
+	// Merge successive comment nodes into one comment string.
 	if comment != nil {
-		if v.prevComment != "" {
-			v.prevComment += "\n"
-		}
-		v.prevComment += comment.Text
+		v.prevComments = append(v.prevComments, comment.Text)
 	} else {
-		v.prevComment = ""
+		v.prevComments = v.prevComments[:0]
 	}
 
 	return v
@@ -311,19 +306,19 @@ func (v *nodeInfoVisitor) checkRefIdents(node ast.Node) error {
 	return err
 }
 
-func (v *nodeInfoVisitor) getTypeOfFunction(f *ast.Function) vimType {
-	argsTypes := make([]vimType, len(f.Params))
+func (v *nodeInfoVisitor) getTypeOfFunction(params []*ast.Ident) vimType {
+	argsTypes := make([]vimType, len(params))
 	for i := range argsTypes {
 		argsTypes[i] = newTypeVar()
 	}
 	return newFuncType(newTupleType(argsTypes...), newTypeVar())
 }
 
-func (v *nodeInfoVisitor) getFuncTypeFromComment(comment string, f *ast.Function) vimType {
+func (v *nodeInfoVisitor) getFuncTypeFromComment(lines []string, f *ast.Function) vimType {
 	var retType vimType
 	argsTypes := make(map[string]vimType, len(f.Params))
-	for _, line := range strings.Split(comment, "\n") {
-		l := &typeLexer{s: line}
+	for i := range lines {
+		l := &typeLexer{input: lines[i]}
 		l.acceptRun(" \t")
 		if !l.accept("@") {
 			continue
@@ -380,8 +375,9 @@ func (v *nodeInfoVisitor) parseType(l *typeLexer) vimType {
 }
 
 type typeLexer struct {
-	s   string
-	pos int
+	input string
+	pos   int
+	width int
 }
 
 const lexEOF = -1
@@ -390,7 +386,7 @@ func (l *typeLexer) accept(set string) bool {
 	if strings.ContainsRune(set, l.next()) {
 		return true
 	}
-	l.pos--
+	l.backup()
 	return false
 }
 
@@ -398,10 +394,10 @@ func (l *typeLexer) acceptRun(set string) bool {
 	if strings.ContainsRune(set, l.next()) {
 		for strings.ContainsRune(set, l.next()) {
 		}
-		l.pos--
+		l.backup()
 		return true
 	}
-	l.pos--
+	l.backup()
 	return false
 }
 
@@ -411,21 +407,28 @@ func (l *typeLexer) acceptWord(word string) bool {
 		return true
 	}
 	l.pos -= len(w)
+	l.width = 1
 	return false
 }
 
 func (l *typeLexer) next() rune {
-	if l.pos >= len(l.s) {
+	if l.pos >= len(l.input) {
+		l.width = 0
 		return lexEOF
 	}
-	r := rune(l.s[l.pos])
-	l.pos++
+	r, w := utf8.DecodeRuneInString(l.input[l.pos:])
+	l.width = w
+	l.pos += l.width
 	return r
+}
+
+func (l *typeLexer) backup() {
+	l.pos -= l.width
 }
 
 func (l *typeLexer) nextWord() string {
 	n := 0
-	s := l.s[l.pos:]
+	s := l.input[l.pos:]
 	for ; n < len(s); n++ {
 		if !l.isAlpha(rune(s[n])) {
 			break

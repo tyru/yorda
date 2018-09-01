@@ -1,43 +1,33 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/haya14busa/go-vimlparser"
+	"github.com/haya14busa/go-vimlparser/ast"
 )
 
 func main() {
 	os.Exit(yordaMain())
 }
 
+func usage() {
+	fmt.Println(`Usage: yorda [SCRIPTS...]`)
+}
+
 func yordaMain() int {
-	filenames, err := walkFiles(os.Args[1:])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return 1
+	if len(os.Args) < 2 {
+		usage()
+		return 0
 	}
-	fset := newFileSet(len(filenames))
-	for _, name := range filenames {
-		r, err := os.Open(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
-			return 2
-		}
-		fi, err := r.Stat()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
-			return 3
-		}
-		file, err := vimlparser.ParseFile(r, name, nil)
-		r.Close()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s\n", name, err.Error())
-			return 4
-		}
-		fset.addFile(name, fi.Size(), file)
+	fset, err := parseArgs(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, strerror(err))
+		return 1
 	}
 	analyzer := newAnalyzer(fset)
 	err = analyzer.run()
@@ -59,20 +49,54 @@ func yordaMain() int {
 	return 0
 }
 
-func walkFiles(args []string) ([]string, error) {
-	files := make([]string, 0, 32)
+func parseArgs(args []string) (*fileSet, error) {
+	fset := newFileSet(64)
+	var lasterr error
+
 	for i := range args {
-		if err := filepath.Walk(args[i], func(path string, info os.FileInfo, err error) error {
+		filepath.Walk(args[i], func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return err
+				lasterr = err
+				return nil
 			}
-			files = append(files, path)
+			parseVimFile(path, func(name string, size int64, file *ast.File, err error) {
+				if err != nil {
+					lasterr = err
+				} else {
+					fset.addFile(name, size, file)
+				}
+			})
 			return nil
-		}); err != nil {
-			return nil, err
+		})
+		if lasterr != nil {
+			return nil, lasterr
 		}
 	}
-	return files, nil
+	if lasterr != nil {
+		return nil, lasterr
+	}
+	return fset, nil
+}
+
+func parseVimFile(name string, callback func(string, int64, *ast.File, error)) {
+	r, err := os.Open(name)
+	if err != nil {
+		callback("", 0, nil, err)
+		return
+	}
+	fi, err := r.Stat()
+	if err != nil {
+		callback("", 0, nil, err)
+		return
+	}
+	buf := bufio.NewReaderSize(r, int(fi.Size())+1)
+	file, err := vimlparser.ParseFile(buf, name, nil)
+	r.Close()
+	if err != nil {
+		callback("", 0, nil, err)
+		return
+	}
+	callback(name, fi.Size(), file, nil)
 }
 
 func strerror(err error) string {
