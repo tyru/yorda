@@ -1,3 +1,12 @@
+:- module(vimscript, [
+  op(500, xfy, @),
+  (@)/2,
+  eval/2,
+  eval/4,
+  prim/1,
+  type_name/2
+]).
+
 % ===================== Operators =====================
 
 :- op(500, xfy, @).
@@ -12,6 +21,7 @@ prim(tFloat(_)).
 prim(tString(_)).
 prim(tList(_)).
 prim(tDict(_, _)).
+prim(tTuple).
 prim(tTuple(_)).
 prim(tTuple(_, _)).
 prim(tTuple(_, _, _)).
@@ -108,28 +118,26 @@ stringify([], S, Result) :- Result = S.
 eval(E, R) :- eval([], E, _, R).
 
 % Primitive types (with position)
-eval(Env, T @ _, Env, R) :- prim(T), R = T.
+eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
 
-% ident(Name, T) @ Pos
+% ident(Name, Rhs) @ Pos
 % Look up ident from env.
-eval([[K, V] | _], ident(Name, T) @ _, _, T) :-
-  K = Name,
-  V = T.
-eval([[K, _] | Env], ident(Name, T) @ Pos, _, R) :-
+eval([ident(Name, Rhs) @ VarPos | _], ident(Name, Rhs) @ _, _, Rhs @ VarPos).
+eval([ident(K, _) | Env], ident(Name, Rhs) @ Pos, _, R) :-
   K \= Name,
-  eval(Env, ident(Name, T) @ Pos, _, R).
+  eval(Env, ident(Name, Rhs) @ Pos, _, R).
 
 % file(Excmds) @ Pos
-eval(Env, file([]) @ _, RetEnv, R).
-eval(Env, file([E1|Xs]) @ Pos, RetEnv, tVoid) :-
-  eval(Env, E1, Env1, tVoid),
-  eval(Env1, file(Xs) @ Pos, RetEnv, tVoid).
+eval(Env, file([]) @ _, Env, _).
+eval(Env, file([E1 @ E1Pos | Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
+  eval(Env, E1 @ E1Pos, Env1, tVoid @ E1Pos),
+  eval(Env1, file(Xs) @ Pos, RetEnv, tVoid @ Pos).
 
 % let(Lhs, =, Rhs) @ Pos
-eval(Env, let(ident(Name, Rhs) @ _, =, Rhs) @ _, [[Name, Rhs] | Env], tVoid).
+eval(Env, let(ident(Name, Rhs) @ IdentPos, =, Rhs) @ LetPos, [ident(Name, Rhs) @ IdentPos | Env], tVoid @ LetPos).
 
 % echo(ExprList) @ Pos
-eval(Env, echo([]) @ _, Env, tVoid).
-eval(Env, echo([E|Xs]) @ Pos, Env, tVoid) :-
+eval(Env, echo([]) @ Pos, Env, tVoid @ Pos).
+eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
   eval(Env, E, Env, _),
-  eval(Env, echo(Xs) @ Pos, Env, tVoid).
+  eval(Env, echo(Xs) @ Pos, Env, tVoid @ Pos).
