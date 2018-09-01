@@ -228,7 +228,7 @@ func (db *fileNodeInfo) getBuiltinIdentInfo(id *ast.Ident, isFunc bool, cname *C
 	}
 	if isFunc {
 		if cname.scope == "vimfunc" {
-			return &identInfo{id, cname, kindFunCall, getVimFuncType(cname)}
+			return &identInfo{id, cname, kindFunCall, newTypeVar()}
 		}
 	} else {
 		if isVimVar(cname.scope, cname.varname) {

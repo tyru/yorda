@@ -231,7 +231,7 @@ func (v *nodeInfoVisitor) Visit(node ast.Node) ast.Visitor {
 			v.info.setType(n, typeString)
 			v.info.setKind(n, kindLiteral)
 		case token.OPTION:
-			v.info.setType(n, getTypeOfVimOption(n.Value))
+			v.info.setType(n, newTypeVar())
 			v.info.setKind(n, kindLiteral)
 		case token.ENV:
 			v.info.setType(n, typeString)

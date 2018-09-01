@@ -1719,7 +1719,7 @@ var vimVariables = []vimVar{
 	{"a", "firstline", vvRO, funcOf(typeInt)},
 	{"a", "lastline", vvRO, funcOf(typeInt)},
 	{"b", "", vvRO, funcOf(typeDict)},
-	{"b", "changedtick", vvCompat + vvRO, funcOf(typeInt)},
+	{"b", "changedtick", vvRO, funcOf(typeInt)},
 	{"g", "", vvRO, funcOf(typeDict)},
 	{"l", "", vvRO, funcOf(typeDict)},
 	{"s", "", vvRO, funcOf(typeDict)},
@@ -1817,13 +1817,6 @@ var vimVariables = []vimVar{
 
 // ===================================================
 
-func getTypeOfVimOption(name string) vimType {
-	if v := lookUpOption(name); v != nil {
-		return v.typ
-	}
-	return nil
-}
-
 func lookUpOption(name string) *vimOption {
 	i := sort.Search(len(vimOptions), func(i int) bool {
 		return strings.Compare(vimOptions[i].name, name) >= 0
@@ -1846,13 +1839,6 @@ func getVimVarCName(name string) *CName {
 		return nil
 	}
 	return newCName(scope, name, "")
-}
-
-func getVimVarType(cname *CName) vimType {
-	if v := lookUpVar(cname.scope, cname.varname); v != nil {
-		return v.typ()
-	}
-	return nil
 }
 
 func isVimVar(scope, name string) bool {
@@ -1894,7 +1880,7 @@ func splitVimVar(varname string) (scope, name string) {
 		name = varname[2:]
 		return
 	}
-	if isCompatVimVar(varname) {
+	if isCompatVimVar("v", varname) {
 		scope = "v"
 		name = varname
 		return
@@ -1903,13 +1889,11 @@ func splitVimVar(varname string) (scope, name string) {
 	return
 }
 
-func isCompatVimVar(name string) bool {
-	switch name {
-	case "count":
-	default:
-		return false
+func isCompatVimVar(scope, name string) bool {
+	if v := lookUpVar(scope, name); v != nil {
+		return v.flags&vvCompat != 0
 	}
-	return true
+	return false
 }
 
 type vimVar struct {
@@ -1936,13 +1920,6 @@ func getVimFuncCName(name string) *CName {
 		return nil
 	}
 	return newCName("vimfunc", name, "")
-}
-
-func getVimFuncType(cname *CName) vimType {
-	if fun := lookUpFunc(cname.varname); fun != nil {
-		return fun.typ()
-	}
-	return nil
 }
 
 func isVimFunc(name string) bool {
