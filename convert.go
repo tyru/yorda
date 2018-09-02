@@ -12,10 +12,6 @@ import (
 	"github.com/haya14busa/go-vimlparser/token"
 )
 
-func newConverter(f *analyFile) *converter {
-	return &converter{indent: "  ", info: f.info}
-}
-
 var emptyReader = strings.NewReader("")
 
 type errorReader struct {
@@ -29,16 +25,15 @@ func (r *errorReader) Read([]byte) (int, error) {
 type converter struct {
 	depth  int    // for indent
 	indent string // a string per 1 indent
-	scope  int
-	info   *fileNodeInfo
+	level  int
 }
 
-func (c *converter) pushScope() {
-	c.scope++
+func (c *converter) incLv() {
+	c.level++
 }
 
-func (c *converter) popScope() {
-	c.scope--
+func (c *converter) decLv() {
+	c.level--
 }
 
 func (c *converter) incIndent() {
@@ -79,7 +74,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(")")
 
 	case *ast.Function:
-		c.pushScope()
+		c.incLv()
 		// function(Name, [Params...], [Body...]) @ Pos
 		buf.WriteString("function(")
 		if _, err := io.Copy(&buf, c.toReader(n.Name)); err != nil {
@@ -94,7 +89,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 			return &errorReader{err}
 		}
 		buf.WriteString(")")
-		c.popScope()
+		c.decLv()
 
 	case *ast.EndFunction: // nothing to do
 
@@ -109,7 +104,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	case *ast.Return:
 		if n.Result != nil {
 			// return(result) @ Pos
-			buf.WriteString("excall(")
+			buf.WriteString("return(")
 			if _, err := io.Copy(&buf, c.toReader(n.Result)); err != nil {
 				return &errorReader{err}
 			}
@@ -481,19 +476,30 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString("])")
 
 	case *ast.Ident:
-		// ident(Name, T) @ Pos
-		buf.WriteString("ident(")
-		scope, name := splitVimVar(n.Name)
+		// ident(Scope, Name, Lv) @ Pos
+		var scope string
+		var lv int
+		name := n.Name
+		if len(n.Name) >= 2 && n.Name[1] == ':' {
+			scope = n.Name[:1]
+			name = n.Name[2:]
+		}
 		if scope == "" {
-			if c.scope == 0 {
+			if c.level == 0 {
 				scope = "g"
 			} else {
 				scope = "l"
 			}
 		}
-		buf.WriteString(quote(scope + ":" + name))
+		if scope == "l" || scope == "a" {
+			lv = c.level
+		}
+		buf.WriteString("ident(")
+		buf.WriteString(quote(scope))
 		buf.WriteString(",")
-		buf.WriteString(newTypeVar().ID())
+		buf.WriteString(quote(name))
+		buf.WriteString(",")
+		buf.WriteString(strconv.Itoa(lv))
 		buf.WriteString(")")
 
 	case *ast.CurlyName:
@@ -524,7 +530,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(")")
 
 	case *ast.LambdaExpr:
-		c.pushScope()
+		c.incLv()
 		// lambda([Params...], Expr) @ Pos
 		buf.WriteString("lambda([")
 		if err := c.writeIdentList(&buf, n.Params); err != nil {
@@ -535,7 +541,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 			return &errorReader{err}
 		}
 		buf.WriteString(")")
-		c.popScope()
+		c.decLv()
 
 	case *ast.ParenExpr:
 		// par(Expr) @ Pos
@@ -552,12 +558,14 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	if buf.Len() == 0 {
 		return emptyReader
 	}
+
 	pos := node.Pos()
 	buf.WriteString(" @ [")
 	buf.WriteString(strconv.Itoa(pos.Line))
 	buf.WriteString(",")
 	buf.WriteString(strconv.Itoa(pos.Column))
 	buf.WriteString("]")
+
 	return &buf
 }
 

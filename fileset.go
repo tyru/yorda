@@ -19,7 +19,7 @@ func newFileSet(cap int) *fileSet {
 // addFile returns non-nil error when given filename is already in the file set.
 func (s *fileSet) addFile(filename string, size int64, node *ast.File) {
 	base := s.base + size + 1 // +1 because EOF also has a position
-	f := analyFile{s.base, size, filename, node, nil}
+	f := analyFile{s.base, size, filename, node}
 	s.files = append(s.files, f)
 	s.base = base
 }
@@ -58,7 +58,6 @@ type analyFile struct {
 	size int64
 	name string
 	node *ast.File
-	info *fileNodeInfo
 }
 
 type setPos int64 // noPos == 0

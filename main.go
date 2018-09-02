@@ -29,22 +29,17 @@ func yordaMain() int {
 		fmt.Fprintln(os.Stderr, strerror(err))
 		return 1
 	}
-	analyzer := newAnalyzer(fset)
-	err = analyzer.run()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, strerror(err))
-		return 10
-	}
 	// TODO query dumped prolog code to prolog processor
 	fset.iterate(func(f *analyFile) bool {
-		r := newConverter(f).toReader(f.node)
+		c := &converter{indent: "  "}
+		r := c.toReader(f.node)
 		_, err = io.Copy(os.Stdout, r)
 		fmt.Println()
 		return err == nil
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, strerror(err))
-		return 20
+		return 10
 	}
 	return 0
 }
