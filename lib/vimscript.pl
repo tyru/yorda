@@ -190,14 +190,7 @@ eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
 %		echo has
 %
 % See call(Fun, Args) for the look-up of functions.
-eval([ident(Scope, Name, Lv) @ _ => Rhs | _], ident(Scope, Name, Lv) @ _, _, Rhs) :- !.
-eval([ident(_, _, _) @ _ => _ | Env], ident(Scope2, N2, Lv2) @ IdentPos, _, R) :-
-  eval(Env, ident(Scope2, N2, Lv2) @ IdentPos, _, R).
-% Certain name of bare word is a compat v: variable.
-eval(Env, ident("", Name, _) @ Pos, Env, R) :-
-  compat(Name, T),
-  R = T @ Pos,
-  !.
+%
 % Top-level bare word is a global variable.
 eval(Env, ident("", Name, 0) @ Pos, Env, R) :-
   not(compat(Name, _)),
@@ -207,6 +200,14 @@ eval(Env, ident("", Name, Lv) @ Pos, Env, R) :-
   Lv > 0,
   not(compat(Name, _)),
   eval(Env, ident("l", Name, Lv) @ Pos, Env, R).
+% Certain name of bare word is a compat v: variable.
+eval(Env, ident("", Name, _) @ Pos, Env, R) :-
+  compat(Name, T),
+  R = T @ Pos,
+  !.
+eval([ident(Scope, Name, Lv) @ _ => Rhs | _], ident(Scope, Name, Lv) @ _, _, Rhs) :- !.
+eval([ident(_, _, _) @ _ => _ | Env], ident(Scope2, N2, Lv2) @ IdentPos, _, R) :-
+  eval(Env, ident(Scope2, N2, Lv2) @ IdentPos, _, R).
 
 % call(Fun, Args) @ Pos
 eval(Env, call(ident(_, Name, _) @ _, Args) @ CallPos, Env, R @ CallPos) :-
