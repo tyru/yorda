@@ -484,16 +484,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 			scope = n.Name[:1]
 			name = n.Name[2:]
 		}
-		if scope == "" {
-			if c.level == 0 {
-				scope = "g"
-			} else {
-				scope = "l"
-			}
-		}
-		if scope == "l" || scope == "a" {
-			lv = c.level
-		}
 		buf.WriteString("ident(")
 		buf.WriteString(quote(scope))
 		buf.WriteString(",")

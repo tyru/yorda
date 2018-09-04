@@ -69,73 +69,73 @@
   % abs(42) == 42
   test(call_abs_int) :-
     eval([],
-      call(ident("g","abs",0) @ nopos, [tInt(42) @ nopos]) @ [1,1],
+      call(ident("","abs",0) @ nopos, [tInt(42) @ nopos]) @ [1,1],
       [],
       tInt(42) @ [1,1]).
   % abs(12.34) == 12.34
   test(call_abs_float) :-
     eval([],
-      call(ident("g","abs",0) @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
+      call(ident("","abs",0) @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
       [],
       tFloat(12.34) @ [1,1]).
   % abs(<tInt>) != <tFloat>
   test(call_abs_fail1) :-
     not(eval([],
-      call(ident("g","abs",0) @ nopos, [tInt(42) @ nopos]) @ [1,1],
+      call(ident("","abs",0) @ nopos, [tInt(42) @ nopos]) @ [1,1],
       [],
       tFloat(_) @ [1,1])).
   % abs(<tFloat>) != <tInt>
   test(call_abs_fail2) :-
     not(eval([],
-      call(ident("g","abs",0) @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
+      call(ident("","abs",0) @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
       [],
       tInt(_) @ [1,1])).
   % acos(0.0) == 1.570796
   test(call_acos) :-
     eval([],
-      call(ident("g","acos",0) @ nopos, [tFloat(0) @ nopos]) @ [1,1],
+      call(ident("","acos",0) @ nopos, [tFloat(0) @ nopos]) @ [1,1],
       [],
       tFloat(1.570796) @ [1,1]).
   % add([], 42) == [42]
   test(call_add) :-
     eval([],
-      call(ident("g","add",0) @ nopos, [tList([]) @ nopos, tInt(42) @ [1,5]]) @ [1,1],
+      call(ident("","add",0) @ nopos, [tList([]) @ nopos, tInt(42) @ [1,5]]) @ [1,1],
       [],
       tList([tInt(42) @ [1,5]]) @ [1,1]).
   % and(1, 1) == 1
   test(call_and) :-
     eval([],
-      call(ident("g","and",0) @ nopos, [tInt(1) @ nopos, tInt(1) @ nopos]) @ [1,1],
+      call(ident("","and",0) @ nopos, [tInt(1) @ nopos, tInt(1) @ nopos]) @ [1,1],
       [],
       tInt(1) @ [1,1]).
   % append(1, "foo") == 0
   test(call_append) :-
     eval([],
-      call(ident("g","append",0) @ nopos, [tInt(1) @ nopos, tString("foo") @ nopos]) @ [1,1],
+      call(ident("","append",0) @ nopos, [tInt(1) @ nopos, tString("foo") @ nopos]) @ [1,1],
       [],
       tInt(0) @ [1,1]).
   % append(".", "foo") == 0
   test(call_append) :-
     eval([],
-      call(ident("g","append",0) @ nopos, [tString(".") @ nopos, tString("foo") @ nopos]) @ [1,1],
+      call(ident("","append",0) @ nopos, [tString(".") @ nopos, tString("foo") @ nopos]) @ [1,1],
       [],
       tInt(0) @ [1,1]).
   % append(1, []) == 0
   test(call_append) :-
     eval([],
-      call(ident("g","append",0) @ nopos, [tInt(1) @ nopos, tList([]) @ nopos]) @ [1,1],
+      call(ident("","append",0) @ nopos, [tInt(1) @ nopos, tList([]) @ nopos]) @ [1,1],
       [],
       tInt(0) @ [1,1]).
   % append(".", []) == 0
   test(call_append) :-
     eval([],
-      call(ident("g","append",0) @ nopos, [tString(".") @ nopos, tList([]) @ nopos]) @ [1,1],
+      call(ident("","append",0) @ nopos, [tString(".") @ nopos, tList([]) @ nopos]) @ [1,1],
       [],
       tInt(0) @ [1,1]).
   % has("eval") == 1
   test(call_has) :-
     eval([],
-      call(ident("g","has",0) @ nopos, [tString("eval") @ nopos]) @ [1,1],
+      call(ident("","has",0) @ nopos, [tString("eval") @ nopos]) @ [1,1],
       [],
       tInt(1) @ [1,1]).
 :- end_tests(expr).
@@ -143,22 +143,22 @@
 :- begin_tests(excmds).
   % let n = 42
   % echo n
-  test(n_is_int, all(RetEnv = [[ident("g", "n", 0) @ [1, 5] => tInt(42) @ [1, 9]]])) :-
+  test(n_is_int, all(RetEnv = [[ident("", "n", 0) @ [1, 5] => tInt(42) @ [1, 9]]])) :-
     eval([], file([
-      let(ident("g","n",0) @ [1,5], =, tInt(42) @ [1,9]) @ nopos,
-      echo([ident("g","n",0) @ nopos]) @ nopos
+      let(ident("","n",0) @ [1,5], =, tInt(42) @ [1,9]) @ nopos,
+      echo([ident("","n",0) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]).
 
   % let has = 42
   % echo has("eval")
   % echo has
   test(func_and_var_are_different_namespaces, all(
-    RetEnv = [[ident("g", "has", 0) @ [1, 5] => tInt(42) @ [1, 11]]]
+    RetEnv = [[ident("", "has", 0) @ [1, 5] => tInt(42) @ [1, 11]]]
   )) :-
     eval([], file([
-      let(ident("g","has",0) @ [1,5], =, tInt(42) @ [1,11]) @ nopos,
-      echo([call(ident("g","has",0) @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
-      echo([ident("g","has",0) @ nopos]) @ nopos
+      let(ident("","has",0) @ [1,5], =, tInt(42) @ [1,11]) @ nopos,
+      echo([call(ident("","has",0) @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
+      echo([ident("","has",0) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]).
 :- end_tests(excmds).
 
