@@ -160,6 +160,64 @@
       echo([call(ident("","has",0) @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
       echo([ident("","has",0) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]).
+
+  % echo function('has')('eval')
+  test(funcref1) :-
+    eval([], file([
+      echo([call(call(ident("","function",0) @ nopos,[tString("has") @ nopos]) @ nopos,[tString("eval") @ nopos]) @ nopos]) @ nopos
+    ]) @ [1,1], [], tVoid @ [1,1]).
+
+  % let F = function('has')
+  % echo F('eval')
+  test(funcref2, all(RetEnv = [[ident("", "F", 0) @ [3, 5] => call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]]])) :-
+    eval([], file([
+      let(ident("","F",0) @ [3,5],=,call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]) @ nopos,
+      echo([call(ident("","F",0) @ nopos,[tString("eval") @ nopos]) @ nopos]) @ nopos
+    ]) @ [1,1], RetEnv, tVoid @ [1,1]).
+
+  % let g:F = function('has')
+  % echo g:F('eval')
+  test(funcref3,
+    Lhs = ident("g", "F", 0) @ [3, 5],
+    Rhs = call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
+    all(RetEnv = [[Lhs => Rhs]])) :-
+    eval([], file([
+      let(Lhs, =, Rhs) @ nopos,
+      echo([call(ident("g","F",0) @ nopos,[tString("eval") @ nopos]) @ nopos]) @ nopos
+    ]) @ [1,1], RetEnv, tVoid @ [1,1]).
+
+  % echo call(function('has'), ['eval'])
+  test(call1) :-
+    eval([], file([
+      echo([
+        call(
+          ident("","call",0) @ [1,6],
+          [
+            call(ident("","function",0) @ [1,11],[tString("has") @ [1,20]]) @ [1,19],
+            tList([tString("eval") @ [1,29]]) @ [1,28]
+          ]
+        ) @ [1,10]
+      ]) @ [1,1]
+    ]) @ [1,1], [], tVoid @ [1,1]).
+
+  % let F = function('has')
+  % echo call(F, ['eval'])
+  test(call2,
+    all(RetEnv = [[ident("","F",0) @ [3,5] => call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]]])) :-
+    eval([], file([
+      let(ident("","F",0) @ [3,5], =, call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]) @ nopos,
+      echo([call(ident("","call",0) @ nopos,[ident("","F",0) @ nopos,tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
+    ]) @ [1,1], RetEnv, tVoid @ [1,1]).
+
+  % let g:F = function('has')
+  % echo call(g:F, ['eval'])
+  test(call3,
+    all(RetEnv = [[ident("g","F",0) @ [3,5] => call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]]])) :-
+    eval([], file([
+      let(ident("g","F",0) @ [3,5], =, call(ident("","function",0) @ [3,9],[tString("has") @ [3,18]]) @ [3,17]) @ nopos,
+      echo([call(ident("","call",0) @ nopos,[ident("g","F",0) @ nopos,tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
+    ]) @ [1,1], RetEnv, tVoid @ [1,1]).
+
 :- end_tests(excmds).
 
 :- run_tests.

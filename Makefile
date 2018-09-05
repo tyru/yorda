@@ -6,4 +6,7 @@ all:
 test:
 	swipl -s lib/test.pl
 
-.PHONY: all test
+repl:
+	cd lib && swipl -s vimscript.pl
+
+.PHONY: all test repl
