@@ -16,15 +16,25 @@
 :- op(500, xfy, ++).
 :- op(600, xfy, ::).
 
-% a++[]
-% a++[b++[]]
-% a++[b++[c++[]]]
-% a++[b++[c++[]], d++[], e++[]]
-% a++[f++[g++[]], c++[], b++[d++[], e++[]]]
+%
+% Here are valid tree of this tree library.
+%
+%		a++[]
+%		a++[b++[]]
+%		a++[b++[c++[]]]
+%		a++[b++[c++[]], d++[], e++[]]
+%		a++[f++[g++[]], c++[], b++[d++[], e++[]]]
+%
+% Node is the form of `Item++Children`.
+% Leaf node is `Children = []`.
+%
+
+% new_tree(+Elem, -Tree)
 new_tree(Elem++Xs, Elem++Xs) :- !.
 new_tree(Elem, Elem++[]) :- not(Elem = _++_), !.
 
-% split_tree(Tree, Path, Node, Expr :: Part).
+% split_tree(+Tree, +Path, -Node, -Expr :: -Part).
+% e.g. split_tree(a++[], [], a++[], a++[] :: a++[]).
 % e.g. split_tree(a++[b++[]], [0], b++[], a++[Part] :: Part).
 split_tree(Node, [], Node, Part :: Part) :- !.
 split_tree(Item++[X|Xs], [0|Ns], Node, Item++[Expr|Xs] :: Part) :-
@@ -35,23 +45,36 @@ split_tree(Item++[X|Xs], [N|Ns], Node, Item++[X|Exprs] :: Part) :-
   split_tree(Item++Xs, [M|Ns], Node, Item++Exprs :: Part),
   !.
 
+% append_tree(+Tree, +Elem, -NewTree)
 append_tree(Tree, Elem, NewTree) :- append_tree(Tree, [], Elem, NewTree).
+
+% prepend_tree(+Tree, +Elem, -NewTree)
 prepend_tree(Tree, Elem, NewTree) :- prepend_tree(Tree, [], Elem, NewTree).
+
+% get_item(+Tree, +Path, -Item)
 get_item(Tree, Path, Item) :- get_node(Tree, Path, Item++_).
 
+% get_node(+Tree, +Path, -Node)
 get_node(Tree, Path, Node) :-
   split_tree(Tree, Path, Node, _ :: _).
+
+% append_tree(+Tree, +Path, +Elem, -NewTree)
 append_tree(Tree, Path, Elem, NewTree) :-
   new_tree(Elem, ElemNode),
   split_tree(Tree, Path, Item++Children, NewTree :: Item++Added),
   append(Children, [ElemNode], Added).
+
+% prepend_tree(+Tree, +Path, +Elem, -NewTree)
 prepend_tree(Tree, Path, Elem, NewTree) :-
   new_tree(Elem, ElemNode),
   split_tree(Tree, Path, Item++Children, NewTree :: Item++[ElemNode|Children]).
+
+% replace_tree(+Tree, +Path, +Elem, -NewTree)
 replace_tree(Tree, Path, Elem, NewTree) :-
   new_tree(Elem, ElemNode),
   split_tree(Tree, Path, _, NewTree :: ElemNode).
 
+% find_tree(+Tree, +Pred, +Path, -NewTree)
 find_tree(Tree, Pred, Path, Node) :-
   find_tree([], Tree, Pred, Path, Node),
   !.
