@@ -9,15 +9,15 @@
     new_tree(node++[], node++[]).
 
   test(split_tree1, Part = a++[b++[], c++[]], Whole = Part) :-
-    append_tree(a++[b++[], c++[]], [], Part, Whole :: xxx).
+    split_tree(a++[b++[], c++[]], [], Part, Whole :: xxx).
   test(split_tree2, Part = b++[], Whole = a++[xxx, c++[]]) :-
-    append_tree(a++[b++[], c++[]], [0], Part, Whole :: xxx).
+    split_tree(a++[b++[], c++[]], [0], Part, Whole :: xxx).
   test(split_tree3, Part = c++[], Whole = a++[b++[], xxx]) :-
-    append_tree(a++[b++[], c++[]], [1], Part, Whole :: xxx).
+    split_tree(a++[b++[], c++[]], [1], Part, Whole :: xxx).
   test(split_tree4) :-
-    not(append_tree(a++[], [0], _, _)).
+    \+ split_tree(a++[], [0], _, _).
   test(split_tree5) :-
-    not(append_tree(a++[], [1], _, _)).
+    \+ split_tree(a++[], [1], _, _).
 
   test(append_tree1, Ans = a++[b++[]]) :-
     append_tree(a++[], [], b, Ans).
@@ -104,22 +104,38 @@
   test(get_item5) :-
     get_item(a++[b++[c++[]], d++[e++[]]], [1,0], e).
 
-  test(find_tree1) :-
-    find_tree(a++[], =(a++_), [], a++[]).
-  test(find_tree2) :-
-    \+ find_tree(a++[], =(b++_), _, _).
-  test(find_tree3) :-
-    find_tree(a++[b++[]], =(b++_), [0], b++[]).
-  test(find_tree4) :-
-    find_tree(a++[b++[c++[]]], =(b++_), [0], b++[c++[]]).
-  test(find_tree5) :-
-    find_tree(a++[b++[], c++[]], =(c++_), [1], c++[]).
-  test(find_tree6) :-
-    find_tree(a++[b++[], c++[d++[]]], =(c++_), [1], c++[d++[]]).
-  test(find_tree7) :-
-    find_tree(a++[b++[], c++[b++[]]], =(b++_), [0], b++[]).
-  test(find_tree8) :-
-    find_tree(a++[b++[c++[b++[]]]], =(b++_), [0], b++[c++[b++[]]]).
+  test(traverse_tree1) :-
+    Tree = a++[],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[])].
+  test(traverse_tree2) :-
+    Tree = a++[b++[]],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[b++[]]), ([0], b++[])].
+  test(traverse_tree3) :-
+    Tree = a++[b++[c++[]]],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[b++[c++[]]]), ([0], b++[c++[]]), ([0, 0], c++[])].
+  test(traverse_tree4) :-
+    Tree = a++[b++[], c++[]],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[b++[], c++[]]), ([0], b++[]), ([1], c++[])].
+
+  test(find_node1) :-
+    Tree = a++[],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Path = [],
+    Results = [([], a++[])].
+  test(find_node2) :-
+    Tree = a++[b++[]],
+    Path = [],
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[b++[]])].    % no b++[] because of Path = []
+  test(find_node3) :-
+    Tree = a++[b++[a++[]]],
+    Node = a++_,
+    findall((Path, Node), traverse_tree(Tree, Path, Node), Results),
+    Results = [([], a++[b++[a++[]]]), ([0, 0], a++[])].    % no b++[a++[]] because of Node = a++_
 
 :- end_tests(tree).
 

@@ -10,7 +10,7 @@
   replace_tree/4,
   get_node/3,
   get_item/3,
-  find_tree/4
+  traverse_tree/3
 ]).
 
 :- op(500, xfy, ++).
@@ -74,19 +74,20 @@ replace_tree(Tree, Path, Elem, NewTree) :-
   new_tree(Elem, ElemNode),
   split_tree(Tree, Path, _, NewTree :: ElemNode).
 
-% find_tree(+Tree, +Pred, +Path, -NewTree)
-find_tree(Tree, Pred, Path, Node) :-
-  find_tree([], Tree, Pred, Path, Node),
-  !.
-find_tree(Cur, Item++Children, Pred, Path, Node) :-
-  call(Pred, Item++Children) ->
-    (Node = Item++Children, Path = Cur) ;
-    find_children([0|Cur], Children, Pred, Path, Node).
-find_children(Cur, [X|Xs], Pred, Path, Node) :-
-  find_tree(Cur, X, Pred, Path, Node);
-  is_leaf(X) ->
-    ([N|Ns] = Cur, M is N + 1,
-      find_children([M|Ns], Xs, Pred, Path, Node)) ;
-    (find_children([0|Cur], X, Pred, Path, Node);
-      find_children([1|Cur], Xs, Pred, Path, Node)).
-is_leaf(_++[]).
+% traverse_tree(+Tree, -RetPath, -RetNode)
+traverse_tree(Tree, Path, Node) :-
+  traverse_tree([], Tree, Path, Node).
+% traverse_tree(+Path, +Node, -RetPath, -RetNode)
+traverse_tree(Path, Node, Path, Node).
+traverse_tree(Path, _++Children, NextPath, NextNode) :-
+  zip_with_index(Children, (Index, Node)),
+  traverse_tree([Index|Path], Node, NextPath, NextNode).
+
+% zip_with_index(+List, (-Index, -Elem))
+zip_with_index(L, X) :-
+  zip_with_index(0, L, X).
+% zip_with_index(+Index, +[Elem|Xs], (-Index, -Elem))
+zip_with_index(I, [X | _], (I, X)).
+zip_with_index(I, [_ | Xs], Next) :-
+  J is I + 1,
+  zip_with_index(J, Xs, Next).
