@@ -153,7 +153,7 @@
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([Var @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let has = 42
   % echo has("eval")
@@ -169,7 +169,7 @@
       echo([call(ident("","has") @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
       echo([Var @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % echo function('has')('eval')
   test(funcref1) :-
@@ -189,7 +189,7 @@
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let g:F = function('has')
   % echo g:F('eval')
@@ -203,7 +203,7 @@
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % echo call(function('has'), ['eval'])
   test(call1) :-
@@ -231,7 +231,7 @@
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos,[Var @ nopos,tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let g:F = function('has')
   % echo call(g:F, ['eval'])
@@ -245,7 +245,7 @@
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos, [Var @ nopos, tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
-    findall((X, Y, Z), get_var(RetEnv, X, Y, Z), Results).
+    findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
 :- end_tests(excmds).
 

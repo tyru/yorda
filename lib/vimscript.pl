@@ -6,12 +6,8 @@
   op(700, xfy, =>),
   (=>)/2,
   new_env/1,
-  add_var/4,
-  get_var/4,
-  get_level/2,
   eval_expr/2,
-  eval/4,
-  prim/1
+  eval/4
 ]).
 
 % ===================== Operators =====================
@@ -142,6 +138,39 @@ new_env([lv:0, vars:[]]).
 % add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 add_func(Env, function(_, _, _) @ _, Env).
 
+% call_func(+Env, call(+Fun, +Args), -R)
+call_func(_, call(Args :: R @ _, Args), R) :- !.
+% Vim built-in function (e.g. has("eval"))
+call_func(Env, call(ident("", Name) @ _, Args), R) :-
+  vimfunc(Env, Name, Args :: R @ _),
+  !.
+% Variable is a funcref
+%
+%		" F = ident(Scope, Name) @ _
+%		let F = function('has')
+%		call F('eval')
+%		let g:has = function('has')
+%		call g:has('eval')
+%
+call_func(Env, call(ident(InScope, Name) @ _, Args), R) :-
+  (InScope = "" ->
+    % no scope, must be a vimfunc or a variable
+    (vimfunc(Env, Name, Args :: R @ _) -> !; add_scope(Env, Name, Scope));
+    Scope = InScope),
+  % must be a variable
+  eval(Env, ident(Scope, Name) @ _, Env, FunT @ _),
+  call_func(Env, call(FunT @ _, Args), R),
+  !.
+% Expression is a funcref
+%
+%		" function('has') = call(ident(Scope, Name) @ _, InnerArgs) @ _
+%		call function('has')('eval')
+%
+call_func(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args), R) :-
+  call_func(Env, call(ident(Scope, Name) @ _, InnerArgs), FunT),
+  call_func(Env, call(FunT @ _, Args), R),
+  !.
+
 % add_var(+Env, ident(+Scope, +Name) @ +Pos, +Rhs, -RetEnv)
 add_var(Env, ident("", Name) @ Pos, Rhs, RetEnv) :-
   add_scope(Env, Name, Scope),
@@ -152,6 +181,17 @@ add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv) :-
   RetEnv = [lv:Lv, vars:[ident(Scope, Name) @ Pos => Rhs | Vars]].
 
 % get_var(+Env, ident(?Scope, ?Name), -Pos, -Rhs)
+%
+% Look up ident variable from env.
+% variables and functions have different namespace.
+% For example, below code outputs "1", and "42".
+%
+%		let has = 42
+%		echo has("eval")
+%		echo has
+%
+% See call_func/3 for the look-up of functions.
+%
 get_var(Env, ident(InScope, Name), Pos, Rhs) :-
   ((nonvar(Name), nonvar(InScope), InScope = "") ->
     add_scope(Env, Name, Scope);
@@ -222,44 +262,11 @@ eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
 eval(Env, subscript(_, _) @ Pos, Env, tVoid @ Pos) :- !.
 
 % eval(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
-eval(Env, call(Args :: R @ _, Args) @ CallPos, Env, R @ CallPos) :- !.
-% Vim built-in function (e.g. has("eval"))
-eval(Env, call(ident("", Name) @ _, Args) @ CallPos, Env, R @ CallPos) :-
-  vimfunc(Env, Name, Args :: R @ _),
-  !.
-% Variable is a funcref
-%
-%		" F = ident(Scope, Name) @ _
-%		let F = function('has')
-%		call F('eval')
-%		let g:has = function('has')
-%		call g:has('eval')
-%
-eval(Env, call(ident(Scope, Name) @ _, Args) @ CallPos, _, R @ CallPos) :-
-  not((Scope = "", vimfunc(Env, Name, _))),
-  eval(Env, ident(Scope, Name) @ _, Env, FunT @ _),
-  eval(Env, call(FunT @ _, Args) @ CallPos, Env, R @ _),
-  !.
-% Expression is a funcref
-%
-%		" function('has') = call(ident(Scope, Name) @ _, InnerArgs) @ _
-%		call function('has')('eval')
-%
-eval(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args) @ CallPos, Env, R @ CallPos) :-
-  eval(Env, call(ident(Scope, Name) @ _, InnerArgs) @ _, Env, FunT @ _),
-  eval(Env, call(FunT @ _, Args) @ CallPos, Env, R @ _),
+eval(Env, call(Fun, Args) @ CallPos, Env, R @ CallPos) :-
+  call_func(Env, call(Fun, Args), R),
   !.
 
-% ident(Scope, Name) @ Pos
-% Look up ident variable from env.
-% variables and functions have different namespace.
-% For example, below code outputs "1", and "42".
-%
-%		let has = 42
-%		echo has("eval")
-%		echo has
-%
-% See call(Fun, Args) for the look-up of functions.
-%
-eval(Env, ident(Scope, Name) @ _, _, Rhs) :-
-  get_var(Env, ident(Scope, Name), _, Rhs).
+% eval(+Env, ident(Scope, Name) @ Pos, -Env, -R)
+eval(Env, ident(Scope, Name) @ Pos, Env, Rhs @ Pos) :-
+  get_var(Env, ident(Scope, Name), _, Rhs @ _),
+  !.
