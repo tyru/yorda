@@ -1,7 +1,7 @@
 
 all:
 	go build
-	for i in examples/*.vim; do ./yorda $$i >$$i.pl; done
+	bash -c 'for i in examples/*.vim; do ./yorda $$i >$${i:0:-3}pl; done'
 
 test:
 	swipl -s lib/test.pl

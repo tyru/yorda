@@ -1,3 +1,4 @@
+new_env(Env), eval(Env, [
 file([
   comment(" @param {Dict} wg") @ [1,1],
   comment(" @param {Int} index") @ [2,1],
@@ -9,4 +10,5 @@ file([
       excall(call(dot(ident("a","wg") @ [8,10],ident("","resolve") @ [8,15]) @ [8,14],[dot(ident("a","wg") @ [8,23],ident("","results") @ [8,28]) @ [8,27]]) @ [8,22]) @ [8,5]
     ]) @ [7,3]
   ]) @ [4,1]
-]) @ [1,1]
+])
+], RetEnv, R). @ [1,1]

@@ -45,11 +45,13 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	switch n := node.(type) {
 	case *ast.File:
 		// file([Args...]) @ Pos
-		buf.WriteString("file(")
+		buf.WriteString("new_env(Env), eval(Env, [\n")
+		buf.WriteString("file([")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(")")
+		buf.WriteString("])\n")
+		buf.WriteString("], RetEnv, R).")
 
 	case *ast.Comment:
 		// comment(Text) @ Pos
@@ -74,11 +76,11 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		if err := c.writeIdentList(&buf, n.Params); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString("],")
+		buf.WriteString("],[")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(")")
+		buf.WriteString("])")
 
 	case *ast.EndFunction: // nothing to do
 
@@ -161,10 +163,11 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		if _, err := io.Copy(&buf, c.toReader(n.Condition)); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(",")
+		buf.WriteString(",[")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
+		buf.WriteString("]")
 		if len(n.ElseIf) > 0 {
 			buf.WriteString(",elseif([")
 			for i, elseif := range n.ElseIf {
@@ -174,19 +177,20 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 				if _, err := io.Copy(&buf, c.toReader(elseif.Condition)); err != nil {
 					return &errorReader{err}
 				}
-				buf.WriteString(",")
+				buf.WriteString(",[")
 				if err := c.writeStmtList(&buf, elseif.Body); err != nil {
 					return &errorReader{err}
 				}
+				buf.WriteString("]")
 			}
 			buf.WriteString("])")
 		}
 		if n.Else != nil {
-			buf.WriteString(",else(")
+			buf.WriteString(",else([")
 			if err := c.writeStmtList(&buf, n.Else.Body); err != nil {
 				return &errorReader{err}
 			}
-			buf.WriteString(")")
+			buf.WriteString("])")
 		}
 		buf.WriteString(")")
 
@@ -202,11 +206,11 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		if _, err := io.Copy(&buf, c.toReader(n.Condition)); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(",")
+		buf.WriteString(",[")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(")")
+		buf.WriteString("])")
 
 	case *ast.EndWhile: // nothing to do
 
@@ -220,11 +224,11 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		if _, err := io.Copy(&buf, c.toReader(n.Right)); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(",")
+		buf.WriteString(",[")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(")")
+		buf.WriteString("])")
 
 	case *ast.EndFor: // nothing to do
 
@@ -240,10 +244,11 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		// try([body...]) @ Pos
 		// try([body...], catch([Pattern, [body...], ...])) @ Pos
 		// try([body...], catch([Pattern, [body...], ...]), finally([body...])) @ Pos
-		buf.WriteString("try(")
+		buf.WriteString("try([")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
 			return &errorReader{err}
 		}
+		buf.WriteString("]")
 		if len(n.Catch) > 0 {
 			buf.WriteString(",catch([")
 			for i, catch := range n.Catch {
@@ -251,19 +256,20 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 					buf.WriteString(",")
 				}
 				buf.WriteString(quote(catch.Pattern))
-				buf.WriteString(",")
+				buf.WriteString(",[")
 				if err := c.writeStmtList(&buf, catch.Body); err != nil {
 					return &errorReader{err}
 				}
+				buf.WriteString("]")
 			}
 			buf.WriteString("])")
 		}
 		if n.Finally != nil {
-			buf.WriteString(",finally(")
+			buf.WriteString(",finally([")
 			if err := c.writeStmtList(&buf, n.Finally.Body); err != nil {
 				return &errorReader{err}
 			}
-			buf.WriteString(")")
+			buf.WriteString("])")
 		}
 		buf.WriteString(")")
 
@@ -571,14 +577,13 @@ func (c *converter) writeExprList(buf *bytes.Buffer, list []ast.Expr) error {
 	return nil
 }
 
-// writeStmtList writes statements including "[" and "]".
+// writeStmtList writes expressions without "[", "]" .
 func (c *converter) writeStmtList(buf *bytes.Buffer, list []ast.Statement) error {
 	if len(list) == 0 {
-		buf.WriteString("[]")
 		return nil
 	}
 	c.incIndent()
-	buf.WriteString("[\n")
+	buf.WriteString("\n")
 	for i := range list {
 		if i > 0 {
 			buf.WriteString(",\n")
@@ -592,7 +597,6 @@ func (c *converter) writeStmtList(buf *bytes.Buffer, list []ast.Statement) error
 	c.decIndent()
 	buf.WriteString("\n")
 	buf.WriteString(c.getIndent())
-	buf.WriteString("]")
 	return nil
 }
 
