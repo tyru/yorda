@@ -128,6 +128,18 @@
       tInt(1) @ [1,1]).
 :- end_tests(expr).
 
+:- begin_tests(node).
+  % file(Excmds)
+  test(file1, all(R = [tVoid @ [1,1]])) :-
+    eval_expr(file([]) @ [1,1], R).
+  test(file2, all(R = [tVoid @ [1,1]])) :-
+    eval_expr(file([comment("comment") @ nopos]) @ [1,1], R).
+
+  % comment(Text)
+  test(comment, all(R = [tVoid @ [1,1]])) :-
+    eval_expr(comment("this is a comment") @ [1,1], R).
+:- end_tests(node).
+
 :- begin_tests(excmds).
   % let n = 42
   % echo n

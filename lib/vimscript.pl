@@ -138,6 +138,10 @@ compat("version", "v", tInt(_)) :- !.         % v:version
 % new_env(-Env)
 new_env([lv:0, vars:[]]).
 
+% TODO
+% add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
+add_func(Env, function(_, _, _) @ _, Env).
+
 % add_var(+Env, ident(+Scope, +Name) @ +Pos, +Rhs, -RetEnv)
 add_var(Env, ident("", Name) @ Pos, Rhs, RetEnv) :-
   add_scope(Env, Name, Scope),
@@ -176,26 +180,48 @@ eval_expr(T, R) :- new_env(Env), eval(Env, T, Env, R).
 % Primitive types (with position)
 eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
 
-% file(Excmds) @ Pos
+% eval(+Env, file(-Excmds) @ -Pos, -RetEnv, -R)
 eval(Env, file([]) @ _, Env, _) :- !.
-eval(Env, file([E1 @ E1Pos | Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval(Env, E1 @ E1Pos, Env1, tVoid @ E1Pos),
-  eval(Env1, file(Xs) @ Pos, RetEnv, tVoid @ Pos),
+eval(Env, file([Excmd @ ExcmdPos | Xs]) @ FilePos, RetEnv, tVoid @ FilePos) :-
+  eval(Env, Excmd @ ExcmdPos, Env1, tVoid @ ExcmdPos),
+  eval(Env1, file(Xs) @ FilePos, RetEnv, tVoid @ FilePos),
   !.
 
-% let(Lhs, =, Rhs) @ Pos
+% eval(+Env, comment(-Text) @ -Pos, -Env, -R)
+eval(Env, comment(_) @ Pos, Env, tVoid @ Pos).
+
+% TODO analyze arguments of excmd
+% eval(+Env, excmd(-Command) @ -Pos, -RetEnv, -R)
+eval(_, excmd(_) @ Pos, _, tVoid @ Pos).
+
+% eval(+Env, function(-Name, -Params, -Body) @ -Pos, -RetEnv, -R)
+eval(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-
+  add_func(Env, function(Name, Params, Body) @ Pos, Env1),
+  eval(Env1, function(Name, Params, Body, Body) @ Pos, RetEnv, tVoid @ Pos),
+  !.
+eval(_, function([]) @ Pos, _, tVoid @ Pos) :- !.
+eval(Env, function([Excmd|Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
+  eval(Env, Excmd @ ExcmdPos, Env1, tVoid @ ExcmdPos),
+  eval(Env1, function(Xs) @ FilePos, RetEnv, tVoid @ FilePos),
+  !.
+
+% eval(+Env, let(-Lhs, =, -Rhs) @ -Pos, -RetEnv, -R)
 eval(Env, let(ident(Scope, Name) @ IdentPos, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
   add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv),
   !.
 
-% echo(ExprList) @ Pos
+% eval(+Env, echo(+ExprList) @ +Pos, -Env, -R)
 eval(Env, echo([]) @ Pos, Env, tVoid @ Pos) :- !.
 eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
   eval(Env, E, Env, _),
   eval(Env, echo(Xs) @ Pos, Env, tVoid @ Pos),
   !.
 
-% call(Fun, Args) @ Pos
+% TODO
+% eval(+Env, subscript(+Left, +Right) @ +Pos, -Env, -R)
+eval(Env, subscript(_, _) @ Pos, Env, tVoid @ Pos) :- !.
+
+% eval(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
 eval(Env, call(Args :: R @ _, Args) @ CallPos, Env, R @ CallPos) :- !.
 % Vim built-in function (e.g. has("eval"))
 eval(Env, call(ident("", Name) @ _, Args) @ CallPos, Env, R @ CallPos) :-
