@@ -25,15 +25,6 @@ func (r *errorReader) Read([]byte) (int, error) {
 type converter struct {
 	depth  int    // for indent
 	indent string // a string per 1 indent
-	level  int
-}
-
-func (c *converter) incLv() {
-	c.level++
-}
-
-func (c *converter) decLv() {
-	c.level--
 }
 
 func (c *converter) incIndent() {
@@ -74,7 +65,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(")")
 
 	case *ast.Function:
-		c.incLv()
 		// function(Name, [Params...], [Body...]) @ Pos
 		buf.WriteString("function(")
 		if _, err := io.Copy(&buf, c.toReader(n.Name)); err != nil {
@@ -89,7 +79,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 			return &errorReader{err}
 		}
 		buf.WriteString(")")
-		c.decLv()
 
 	case *ast.EndFunction: // nothing to do
 
@@ -478,7 +467,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	case *ast.Ident:
 		// ident(Scope, Name, Lv) @ Pos
 		var scope string
-		var lv int
 		name := n.Name
 		if len(n.Name) >= 2 && n.Name[1] == ':' {
 			scope = n.Name[:1]
@@ -488,8 +476,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(quote(scope))
 		buf.WriteString(",")
 		buf.WriteString(quote(name))
-		buf.WriteString(",")
-		buf.WriteString(strconv.Itoa(lv))
 		buf.WriteString(")")
 
 	case *ast.CurlyName:
@@ -520,7 +506,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(")")
 
 	case *ast.LambdaExpr:
-		c.incLv()
 		// lambda([Params...], Expr) @ Pos
 		buf.WriteString("lambda([")
 		if err := c.writeIdentList(&buf, n.Params); err != nil {
@@ -531,7 +516,6 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 			return &errorReader{err}
 		}
 		buf.WriteString(")")
-		c.decLv()
 
 	case *ast.ParenExpr:
 		// par(Expr) @ Pos
