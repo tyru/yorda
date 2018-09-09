@@ -12,8 +12,6 @@ import (
 	"github.com/haya14busa/go-vimlparser/token"
 )
 
-var emptyReader = strings.NewReader("")
-
 type errorReader struct {
 	err error
 }
@@ -45,13 +43,26 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 	switch n := node.(type) {
 	case *ast.File:
 		// file([Args...]) @ Pos
-		buf.WriteString("new_env(Env), eval(Env, [\n")
-		buf.WriteString("file([")
-		if err := c.writeStmtList(&buf, n.Body); err != nil {
-			return &errorReader{err}
+		buf.WriteString(`:- consult('../lib/vimscript.pl').
+:- use_module('../lib/vimscript.pl').
+
+main :- new_env(Env), eval(Env, file([`)
+		if len(n.Body) > 0 {
+			c.incIndent()
+			if err := c.writeStmtList(&buf, n.Body); err != nil {
+				return &errorReader{err}
+			}
+			buf.WriteString(c.getIndent())
+			c.decIndent()
 		}
-		buf.WriteString("])\n")
-		buf.WriteString("], RetEnv, R).")
+		buf.WriteString("])")
+		c.writePos(&buf, node)
+
+		buf.WriteString(`, _, _), halt.
+
+:- main; halt(1).
+`)
+		return &buf
 
 	case *ast.Comment:
 		// comment(Text) @ Pos
@@ -535,18 +546,18 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		panic(fmt.Sprintf("ast.Walk: unexpected node type %T", n))
 	}
 
-	if buf.Len() == 0 {
-		return emptyReader
-	}
+	c.writePos(&buf, node)
 
+	return &buf
+}
+
+func (c *converter) writePos(buf *bytes.Buffer, node ast.Node) {
 	pos := node.Pos()
 	buf.WriteString(" @ [")
 	buf.WriteString(strconv.Itoa(pos.Line))
 	buf.WriteString(",")
 	buf.WriteString(strconv.Itoa(pos.Column))
 	buf.WriteString("]")
-
-	return &buf
 }
 
 // writeIdentList writes ident list without "[", "]" .
