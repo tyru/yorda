@@ -176,19 +176,24 @@ eval_expr(T, R) :- new_env(Env), eval(Env, T, Env, R).
 % Primitive types (with position)
 eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
 
-% ident(Scope, Name) @ Pos
-% Look up ident variable from env.
-% variables and functions have different namespace.
-% For example, below code outputs "1", and "42".
-%
-%		let has = 42
-%		echo has("eval")
-%		echo has
-%
-% See call(Fun, Args) for the look-up of functions.
-%
-eval(Env, ident(Scope, Name) @ _, _, Rhs) :-
-  get_var(Env, ident(Scope, Name), _, Rhs).
+% file(Excmds) @ Pos
+eval(Env, file([]) @ _, Env, _) :- !.
+eval(Env, file([E1 @ E1Pos | Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
+  eval(Env, E1 @ E1Pos, Env1, tVoid @ E1Pos),
+  eval(Env1, file(Xs) @ Pos, RetEnv, tVoid @ Pos),
+  !.
+
+% let(Lhs, =, Rhs) @ Pos
+eval(Env, let(ident(Scope, Name) @ IdentPos, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
+  add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv),
+  !.
+
+% echo(ExprList) @ Pos
+eval(Env, echo([]) @ Pos, Env, tVoid @ Pos) :- !.
+eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
+  eval(Env, E, Env, _),
+  eval(Env, echo(Xs) @ Pos, Env, tVoid @ Pos),
+  !.
 
 % call(Fun, Args) @ Pos
 eval(Env, call(Args :: R @ _, Args) @ CallPos, Env, R @ CallPos) :- !.
@@ -219,21 +224,16 @@ eval(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args) @ CallPos, Env
   eval(Env, call(FunT @ _, Args) @ CallPos, Env, R @ _),
   !.
 
-% file(Excmds) @ Pos
-eval(Env, file([]) @ _, Env, _) :- !.
-eval(Env, file([E1 @ E1Pos | Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval(Env, E1 @ E1Pos, Env1, tVoid @ E1Pos),
-  eval(Env1, file(Xs) @ Pos, RetEnv, tVoid @ Pos),
-  !.
-
-% let(Lhs, =, Rhs) @ Pos
-eval(Env, let(ident(Scope, Name) @ IdentPos, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
-  add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv),
-  !.
-
-% echo(ExprList) @ Pos
-eval(Env, echo([]) @ Pos, Env, tVoid @ Pos) :- !.
-eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
-  eval(Env, E, Env, _),
-  eval(Env, echo(Xs) @ Pos, Env, tVoid @ Pos),
-  !.
+% ident(Scope, Name) @ Pos
+% Look up ident variable from env.
+% variables and functions have different namespace.
+% For example, below code outputs "1", and "42".
+%
+%		let has = 42
+%		echo has("eval")
+%		echo has
+%
+% See call(Fun, Args) for the look-up of functions.
+%
+eval(Env, ident(Scope, Name) @ _, _, Rhs) :-
+  get_var(Env, ident(Scope, Name), _, Rhs).
