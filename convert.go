@@ -125,13 +125,15 @@ main :- new_env(Env), eval(Env, file([`)
 		buf.WriteString(")")
 
 	case *ast.Let:
-		// let(lhs, =, rhs) @ Pos
+		// let(lhs, Op, rhs) @ Pos
 		// lhs = [a, b, c | rest]
 		buf.WriteString("let(")
 		if err := c.writeLHS(&buf, n.Left, n.List, n.Rest); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(",=,")
+		buf.WriteString(",")
+		buf.WriteString(n.Op)
+		buf.WriteString(",")
 		if _, err := io.Copy(&buf, c.toReader(n.Right)); err != nil {
 			return &errorReader{err}
 		}
@@ -341,23 +343,24 @@ main :- new_env(Env), eval(Env, file([`)
 		buf.WriteString(")")
 
 	case *ast.BinaryExpr:
-		// (Left Op Right) @ Pos
-		buf.WriteString("(")
+		// op(Left, Op, Right) @ Pos
+		buf.WriteString("op(")
 		if _, err := io.Copy(&buf, c.toReader(n.Left)); err != nil {
 			return &errorReader{err}
 		}
-		buf.WriteString(" ")
+		buf.WriteString(",")
 		buf.WriteString(n.Op.String())
-		buf.WriteString(" ")
+		buf.WriteString(",")
 		if _, err := io.Copy(&buf, c.toReader(n.Right)); err != nil {
 			return &errorReader{err}
 		}
 		buf.WriteString(")")
 
 	case *ast.UnaryExpr:
-		// Op(Expr) @ Pos
+		// op(Op, Expr) @ Pos
+		buf.WriteString("op(")
 		buf.WriteString(n.Op.String())
-		buf.WriteString("(")
+		buf.WriteString(",")
 		if _, err := io.Copy(&buf, c.toReader(n.X)); err != nil {
 			return &errorReader{err}
 		}

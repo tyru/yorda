@@ -27,6 +27,10 @@ empty([]).
 
 prim(tAny).
 prim(tVoid).
+% v:true == tBool(true), v:false == tBool(false)
+prim(tBool(_)).
+% v:null == tNone(null), v:none == tNone(none)
+prim(tNone(_)).
 % 42 == tInt(42)
 prim(tInt(_)).
 % 12.34 == tFloat(12.34)
@@ -245,7 +249,11 @@ eval(Env, function([Excmd|Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
   eval(Env1, function(Xs) @ FilePos, RetEnv, tVoid @ FilePos),
   !.
 
-% eval(+Env, let(-Lhs, =, -Rhs) @ -Pos, -RetEnv, -R)
+% eval(+Env, let(-Lhs, Op, -Rhs) @ -Pos, -RetEnv, -R)
+eval(Env, let(ident(Scope, Name) @ IdentPos, -=, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
+  Value = op(ident(Scope, Name) @ IdentPos, -, Rhs),
+  eval(Env, let(ident(Scope, Name) @ IdentPos, =, Value) @ LetPos, RetEnv, tVoid @ LetPos),
+  !.
 eval(Env, let(ident(Scope, Name) @ IdentPos, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
   add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv),
   !.
@@ -261,12 +269,20 @@ eval(Env, echo([E|Xs]) @ Pos, Env, tVoid @ Pos) :-
 % eval(+Env, subscript(+Left, +Right) @ +Pos, -Env, -R)
 eval(Env, subscript(_, _) @ Pos, Env, tVoid @ Pos) :- !.
 
+% TODO
+% eval(+Env, dot(+Left, +Right) @ +Pos, -Env, -R)
+eval(Env, dot(_, _) @ Pos, Env, tVoid @ Pos) :- !.
+
+% TODO
+% eval(+Env, op(+Left, +Op, +Right) @ +Pos, -Env, -R)
+eval(Env, op(_, ==, _) @ Pos, Env, tBool(_) @ Pos) :- !.
+
 % eval(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
 eval(Env, call(Fun, Args) @ CallPos, Env, R @ CallPos) :-
   call_func(Env, call(Fun, Args), R),
   !.
 
-% eval(+Env, ident(Scope, Name) @ Pos, -Env, -R)
+% eval(+Env, ident(+Scope, +Name) @ +Pos, -Env, -R)
 eval(Env, ident(Scope, Name) @ Pos, Env, Rhs @ Pos) :-
   get_var(Env, ident(Scope, Name), _, Rhs @ _),
   !.
