@@ -199,7 +199,7 @@ call_func(Env, call(ident("", Name) @ _, Args), R) :-
 % A variable (with scope) is a funcref (e.g. l:F(42), g:F(42))
 call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
   \+ Scope = "",
-  eval(Env, ident(Scope, Name) @ _, Env, FunT @ _),
+  eval_expr(Env, ident(Scope, Name) @ _, FunT @ _),
   call_func(Env, call(FunT @ _, Args), R),
   !.
 % Expression is a funcref
@@ -244,96 +244,107 @@ add_scope(Env, Name, Scope) :-
   get_level(Env, Lv),
   Lv > 0 -> Scope = "l"; Scope = "g".
 
+% run_hook(+Env, +Hook)
+run_hook(_, _).
+
 % ===================== Vim script syntax =====================
 
-:- discontiguous(eval/4).
-
-% For convenience
+% eval_expr(+T, -R)
 eval_expr(T, R) :- new_env(Env), eval(Env, T, Env, R).
+% eval_expr(+Env, +T, -R)
 eval_expr(Env, T, R) :- eval(Env, T, Env, R).
 
+% eval_excmds(+Env, +Excmds, -RetEnv)
 eval_excmds(Env, Excmds, RetEnv) :-
-  foldl(eval_block, Excmds, Env, RetEnv).
-eval_block(Excmd, Env, RetEnv) :-
+  foldl(eval_excmd1, Excmds, Env, RetEnv).
+eval_excmd1(Excmd, Env, RetEnv) :-
   eval(Env, Excmd, RetEnv, tVoid @ _).
 
-% Primitive types (with position)
-eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
+% eval(+Env, +T, -RetEnv, -R)
+eval(Env, T, RetEnv, R) :-
+  run_hook(Env, on_enter),
+  traverse(Env, T, RetEnv, R),
+  run_hook(RetEnv, on_leave),
+  !.
 
-% eval(+Env, file(+Excmds) @ +Pos, -RetEnv, -R)
-eval(Env, file(Body) @ Pos, RetEnv, tVoid @ Pos) :-
+% Primitive types (with position)
+traverse(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
+
+% traverse(+Env, file(+Excmds) @ +Pos, -RetEnv, -R)
+traverse(Env, file(Body) @ Pos, RetEnv, tVoid @ Pos) :-
   eval_excmds(Env, Body, RetEnv),
   !.
 
-% eval(+Env, comment(+Text) @ +Pos, -Env, -R)
-eval(Env, comment(_) @ Pos, Env, tVoid @ Pos).
+% traverse(+Env, comment(+Text) @ +Pos, -Env, -R)
+traverse(Env, comment(_) @ Pos, Env, tVoid @ Pos).
 
 % TODO analyze arguments of excmd
-% eval(+Env, excmd(+Command) @ +Pos, -RetEnv, -R)
-eval(_, excmd(_) @ Pos, _, tVoid @ Pos).
+% traverse(+Env, excmd(+Command) @ +Pos, -RetEnv, -R)
+traverse(_, excmd(_) @ Pos, _, tVoid @ Pos).
 
-% eval(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv, -R)
-eval(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-
+% traverse(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv, -R)
+traverse(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-
   add_func(Env, function(Name, Params, Body) @ Pos, Env1),
   eval_excmds(Env1, Body, RetEnv),
   !.
 
-% eval(+Env, excall(+FuncCall) @ +Pos, -Env, -R)
-eval(Env, excall(FuncCall) @ Pos, Env, tVoid @ Pos) :-
+% traverse(+Env, excall(+FuncCall) @ +Pos, -Env, -R)
+traverse(Env, excall(FuncCall) @ Pos, Env, tVoid @ Pos) :-
   eval_expr(Env, FuncCall, _),
   !.
 
-% eval(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, -RetEnv, -R)
-eval(Env, let(Lhs, -=, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
+% traverse(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, -RetEnv, -R)
+traverse(Env, let(Lhs, -=, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
   Value = op(Lhs, -, Rhs),
-  eval(Env, let(Lhs, =, Value) @ LetPos, RetEnv, tVoid @ LetPos),
+  traverse(Env, let(Lhs, =, Value) @ LetPos, RetEnv, tVoid @ LetPos),
   !.
-eval(Env, let(Lhs, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
+traverse(Env, let(Lhs, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
   (Lhs = ident(Scope, Name) @ IdentPos ->
     add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv);
     true),    % TODO subscript, dot, ...
   !.
 
-% eval(+Env, if(+Cond, +Body) @ +Pos, -RetEnv, -R)
-eval(Env, if(Cond, Body) @ Pos, RetEnv, tVoid @ Pos) :-
+% traverse(+Env, if(+Cond, +Body) @ +Pos, -RetEnv, -R)
+traverse(Env, if(Cond, Body) @ Pos, RetEnv, tVoid @ Pos) :-
   eval_expr(Env, Cond, R @ _),
   to_bool(R, _),
   eval_excmds(Env, Body, RetEnv),
   !.
 
 % TODO
-% eval(+Env, if(+Cond, +Body, else(+ElseBody)) @ +Pos, -RetEnv, -R)
-% eval(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...])) @ +Pos, -RetEnv, -R)
-% eval(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...]), else(+ElseBody)) @ +Pos, -RetEnv, -R)
+% traverse(+Env, if(+Cond, +Body, else(+ElseBody)) @ +Pos, -RetEnv, -R)
+% traverse(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...])) @ +Pos, -RetEnv, -R)
+% traverse(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...]), else(+ElseBody)) @ +Pos, -RetEnv, -R)
 
-% eval(+Env, echo(+ExprList) @ +Pos, -Env, -R)
-eval(Env, echo(ExprList) @ Pos, Env, tVoid @ Pos) :-
+% traverse(+Env, echo(+ExprList) @ +Pos, -Env, -R)
+traverse(Env, echo(ExprList) @ Pos, Env, tVoid @ Pos) :-
   maplist(eval_expr(Env), ExprList, _),
   !.
 
 % TODO
-% eval(+Env, subscript(+Left, +Right) @ +Pos, -Env, -R)
-eval(Env, subscript(Left @ _, Right @ _) @ Pos, Env, R @ Pos) :-
+% traverse(+Env, subscript(+Left, +Right) @ +Pos, -Env, -R)
+traverse(Env, subscript(Left @ _, Right @ _) @ Pos, Env, R @ Pos) :-
   eval_expr(Env, Left @ _, Left1 @ _),
   eval_expr(Env, Right @ _, Right1 @ _),
   get_prop(Left1, Right1, R),
   !.
 
-% eval(+Env, dot(+Left, +Right) @ +Pos, -Env, -R)
-eval(Env, dot(Left @ _, ident(_, Name) @ _) @ Pos, Env, R @ Pos) :-
-  eval(Env, subscript(Left @ _, tString(Name) @ _) @ Pos, Env, R @ _),
+% traverse(+Env, dot(+Left, +Right) @ +Pos, -Env, -R)
+traverse(Env, dot(Left @ _, ident(_, Name) @ _) @ Pos, Env, R @ Pos) :-
+  eval_expr(Env, Left @ _, Left1 @ _),
+  get_prop(Left1, tString(Name), R),
   !.
 
 % TODO
-% eval(+Env, op(+Left, +Op, +Right) @ +Pos, -Env, -R)
-eval(Env, op(_, ==, _) @ Pos, Env, tInt(_) @ Pos) :- !.
+% traverse(+Env, op(+Left, +Op, +Right) @ +Pos, -Env, -R)
+traverse(Env, op(_, ==, _) @ Pos, Env, tInt(_) @ Pos) :- !.
 
-% eval(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
-eval(Env, call(Fun, Args) @ CallPos, Env, R @ CallPos) :-
+% traverse(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
+traverse(Env, call(Fun, Args) @ CallPos, Env, R @ CallPos) :-
   call_func(Env, call(Fun, Args), R),
   !.
 
-% eval(+Env, ident(+Scope, +Name) @ +Pos, -Env, -R)
-eval(Env, ident(Scope, Name) @ Pos, Env, Rhs @ Pos) :-
+% traverse(+Env, ident(+Scope, +Name) @ +Pos, -Env, -R)
+traverse(Env, ident(Scope, Name) @ Pos, Env, Rhs @ Pos) :-
   get_var(Env, ident(Scope, Name), _, Rhs @ _),
   !.
