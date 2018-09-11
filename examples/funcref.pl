@@ -1,7 +1,7 @@
 :- consult('../lib/vimscript.pl').
 :- use_module('../lib/vimscript.pl').
 
-main :- new_eval_env(Env), eval(Env, file([
+main :- eval(file([
     echo([call(call(ident("","function") @ [1,6],[tString("has") @ [1,15]]) @ [1,14],[tString("eval") @ [1,22]]) @ [1,21]]) @ [1,1],
     let(ident("","F") @ [3,5],=,call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17]) @ [3,1],
     echo([call(ident("","F") @ [4,6],[tString("eval") @ [4,8]]) @ [4,7]]) @ [4,1],

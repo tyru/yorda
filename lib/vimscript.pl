@@ -5,7 +5,6 @@
   (@)/2,
   op(700, xfy, =>),
   (=>)/2,
-  new_eval_env/1,
   eval/3,
   eval_expr/2
 ]).
@@ -33,6 +32,11 @@ update_assoc_list(Elem, List, Updated, UpdatedList) :-
   maplist(update(Elem, Updated), List, UpdatedList).
 update(Elem, Updated, Elem, Updated).
 update(X, _, Y, Y) :- \+ X = Y.
+
+% split_list(+N, +List, -Taken, -Dropped)
+split_list(0, Dropped, [], Dropped) :- !.
+split_list(N, [X | List], [X | Taken], Dropped) :-
+  N > 0, M is N - 1, split_list(M, List, Taken, Dropped), !.
 
 % ===================== Primitive types =====================
 
@@ -169,16 +173,7 @@ compat("version", "v", tInt(_)) :- !.         % v:version
 
 % ===================== Env =====================
 
-% new_eval_env(-Env)
-new_eval_env(Env) :-
-  new_env(E1),
-  add_hooks(E1, [on_leave:on_let_enter, on_leave:on_function_enter], E2),
-  append(E2, [stack:[42], lv:0, vars:[], funcs:[]], Env).
-
-% get_result(+Env, -Result)
-get_result(Env, Top) :- member(stack:[Top | _], Env).
-
-% eval(+Env, +Node, -RetEnv, -Result)
+% eval(+Node, -RetEnv, -Result)
 eval(Node, RetEnv, Result) :-
   new_eval_env(Env),
   eval(Env, Node, RetEnv, Result).
@@ -189,10 +184,29 @@ eval_expr(Node, Result) :- new_eval_env(Env), eval(Env, Node, Env, Result).
 % ----------------- private -----------------
 
 eval(Env, Node, RetEnv, Result) :-
-  traverse(Env, Node, RetEnv),
-  get_result(RetEnv, Result).
+  traverse(Env, Node, E1),
+  get_stack(E1, Stack),
+  (\+ empty(Stack) ->
+    pop(E1, Result, RetEnv);
+    (RetEnv, Result) = (E1, tSuccess)).
 
 eval_expr(Env, Node, Result) :- eval(Env, Node, Env, Result).
+
+% new_eval_env(-Env)
+new_eval_env(Env) :-
+  new_env(E1),
+  add_hooks(E1, [on_enter:on_let_enter, on_enter:on_function_enter, on_leave:do_eval], E2),
+  append(E2, [stack:[], lv:0, vars:[], funcs:[]], Env).
+
+get_stack(Env, Stack) :- member(stack:Stack, Env).
+
+% push(+Env, +Value, -RetEnv)
+push(Env, Value, RetEnv) :-
+  update_assoc_list(stack:Stack, Env, stack:[Value | Stack], RetEnv).
+
+% pop(+Env, -Value, -RetEnv)
+pop(Env, Value, RetEnv) :-
+  update_assoc_list(stack:[Value | Rest], Env, stack:Rest, RetEnv).
 
 % get_level(+Env, -Lv)
 get_level(Env, Lv) :- member(lv:Lv, Env).
@@ -203,13 +217,13 @@ get_vars(Env, Vars) :- member(vars:Vars, Env).
 % get_funcs(+Env, -Funcs)
 get_funcs(Env, Funcs) :- member(funcs:Funcs, Env).
 
-% update_var(+Env, +Vars, -UpdateVars, -RetEnv)
+% update_var(+Env, +Vars, +UpdateVars, -RetEnv)
 update_var(Env, Vars, UpdateVars, RetEnv) :-
-  update_assoc_list(vars:Vars, Env, UpdateVars, RetEnv).
+  update_assoc_list(vars:Vars, Env, vars:UpdateVars, RetEnv).
 
-% update_func(+Env, +Funcs, -UpdateFuncs, -RetEnv)
+% update_func(+Env, +Funcs, +UpdateFuncs, -RetEnv)
 update_func(Env, Funcs, UpdateFuncs, RetEnv) :-
-  update_assoc_list(funcs:Funcs, Env, UpdateFuncs, RetEnv).
+  update_assoc_list(funcs:Funcs, Env, funcs:UpdateFuncs, RetEnv).
 
 % add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 add_func(Env, function(Name, Params, Body) @ Pos, RetEnv) :-
@@ -287,12 +301,70 @@ get_func(Env, ident(Scope, Name), Pos, Func) :-
 % ===================== Evaluation functions =====================
 
 % TODO destructuring, subscript, dot, ...
-on_let_enter(Env, let(Lhs, Op, Rhs) @ _, _, RetEnv) :-
-  add_var(Env, Lhs, [Op, Rhs], RetEnv),
-  !.
-on_function_enter(Env, function(Name, Params, Body) @ Pos, _, RetEnv) :-
-  add_func(Env, function(Name, Params, Body) @ Pos, RetEnv),
-  !.
+on_let_enter(Env, let(Lhs, =, Rhs) @ _, on_enter, RetEnv) :-
+  add_var(Env, Lhs, Rhs, RetEnv), !.
+
+on_function_enter(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
+  add_func(Env, function(Name, Params, Body) @ Pos, RetEnv), !.
+
+do_eval(Env, Node @ _, on_leave, RetEnv) :-
+  push(Env, Node, E1),
+  reduce(E1, RetEnv).
+
+reduce(Env, RetEnv) :-
+  get_stack(Env, Stack),
+  reduce(Env, Stack, RetStack) ->
+    update_assoc_list(stack:Stack, Env, stack:RetStack, RetEnv);
+    RetEnv = Env.
+
+% ------- reduce(+Env, +Node, +Stack, -RetStack) -------
+
+% Push primitive values as-is.
+% reduce(_, [T | Stack], [T | Stack]) :- prim(T), !.
+
+reduce(_, [file(_) | Stack], Stack) :- !.
+
+reduce(_, [comment(_) | Stack], Stack) :- !.
+
+reduce(_, [excmd(_) | Stack], Stack) :- !.
+
+reduce(_, [return(_), _ | Stack], Stack) :- !.
+
+reduce(_, [function(_, ParamsOrig, _), Stack], RetStack) :-
+  length(ParamsOrig, ParamsN),
+  N is 1 + ParamsN,    % Name + Params
+  split_list(N, Stack, _, RetStack), !.
+
+reduce(_, [excall(_), _ | Stack], Stack) :- !.
+
+% TODO destructuring, subscript, dot, ...
+reduce(_, [let(_, _, _), _, _ | Stack], Stack) :- !.
+
+reduce(_, [if(_, _), _ | Stack], Stack) :- !.
+
+reduce(_, [echo(ExprList) | Stack], RetStack) :-
+  length(ExprList, N),
+  split_list(N, Stack, _, RetStack), !.
+
+reduce(_, [subscript(_, _), Right, Left | Stack], [Value | Stack]) :-
+  get_prop(Left, Right, Value), !.
+
+reduce(_, [dot(_, _), ident(_, Name), Left | Stack], [Value | Stack]) :-
+  get_prop(Left, tString(Name), Value), !.
+
+% TODO check lhs, rhs types
+% TODO other ops
+reduce(_, [op(_, ==, _), _, _ | Stack], [tInt(_) | Stack]) :- !.
+
+reduce(Env, [call(_, ArgsOrig) | Stack], RetStack) :-
+  length(ArgsOrig, Arity),
+  N is 1 + Arity,    % Fun + Args
+  split_list(N, Stack, [Fun | Args], S1),
+  call_func(Env, call(Fun, Args), Value),
+  RetStack = [Value | S1], !.
+
+% Push ident as-is.
+% reduce(_, [ident(Scope, Name), Stack], [ident(Scope, Name), Stack]) :- !.
 
 % ===================== Traversal functions =====================
 
@@ -312,7 +384,7 @@ run_hook(Env, Node, Event, RetEnv) :-
   findall(Func, member(Event:Func, Hooks), FuncList),
   foldl(do_run_hook(Node, Event), FuncList, Env, RetEnv).
 do_run_hook(Node, Event, Func, Env, RetEnv) :-
-  call(Func, Env, Node, Event, RetEnv); RetEnv = Env.
+  call(Func, Env, Node, Event, RetEnv) -> !; RetEnv = Env.
 
 % traverse(+Env, +Node, -RetEnv)
 traverse(Env, Node, RetEnv) :-
@@ -321,8 +393,8 @@ traverse(Env, Node, RetEnv) :-
   run_hook(E2, Node, on_leave, RetEnv).
 
 % traverse_list(+Env, +NodeList, -RetEnv)
-traverse_list(Env, NodeList, RetEnv) :- foldl(esrevart, NodeList, Env, RetEnv).
-esrevart(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
+traverse_list(Env, NodeList, RetEnv) :- foldl(traverse_rev, NodeList, Env, RetEnv).
+traverse_rev(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
 
 % Primitive types (with position)
 trav(Env, Node @ _, Env) :- prim(Node), !.
@@ -344,8 +416,7 @@ trav(Env, return(Expr) @ _, RetEnv) :- traverse(Env, Expr, RetEnv), !.
 % trav(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 trav(Env, function(Name, Params, Body) @ _, RetEnv) :-
   append([Name | Params], Body, L),
-  traverse_list(Env, L, RetEnv),
-  !.
+  traverse_list(Env, L, RetEnv), !.
 
 % trav(+Env, excall(+FuncCall) @ +Pos, -RetEnv)
 trav(Env, excall(FuncCall) @ _, RetEnv) :- traverse(Env, FuncCall, RetEnv), !.

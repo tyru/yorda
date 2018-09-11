@@ -46,7 +46,7 @@ func (c *converter) toReader(node ast.Node) io.Reader {
 		buf.WriteString(`:- consult('../lib/vimscript.pl').
 :- use_module('../lib/vimscript.pl').
 
-main :- new_eval_env(Env), eval(Env, file([`)
+main :- eval(file([`)
 		if len(n.Body) > 0 {
 			c.incIndent()
 			if err := c.writeStmtList(&buf, n.Body); err != nil {

@@ -7,62 +7,62 @@
 :- end_tests(error).
 
 :- begin_tests(primitive_types).
-  test(tAny, all(R = [tAny @ Pos])) :-
-    eval_expr(tAny @ Pos, R).
-  test(tVoid, all(R = [tVoid @ Pos])) :-
-    eval_expr(tVoid @ Pos, R).
-  test(tInt, all(R = [tInt(_) @ Pos])) :-
-    eval_expr(tInt(_) @ Pos, R).
-  test(tFloat, all(R = [tFloat(_) @ Pos])) :-
-    eval_expr(tFloat(_) @ Pos, R).
-  test(tString, all(R = [tString(_) @ Pos])) :-
-    eval_expr(tString(_) @ Pos, R).
-  test(tList, all(R = [tList(_) @ Pos])) :-
-    eval_expr(tList(_) @ Pos, R).
-  test(tDict, all(R = [tDict(_) @ Pos])) :-
-    eval_expr(tDict(_) @ Pos, R).
-  test(tTuple0, all(R = [tTuple @ Pos])) :-
-    eval_expr(tTuple @ Pos, R).
-  test(tTuple1, all(R = [tTuple(_) @ Pos])) :-
-    eval_expr(tTuple(_) @ Pos, R).
-  test(tTuple2, all(R = [tTuple(_, _) @ Pos])) :-
-    eval_expr(tTuple(_, _) @ Pos, R).
-  test(tTuple3, all(R = [tTuple(_, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _) @ Pos, R).
-  test(tTuple4, all(R = [tTuple(_, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _) @ Pos, R).
-  test(tTuple5, all(R = [tTuple(_, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _) @ Pos, R).
-  test(tTuple6, all(R = [tTuple(_, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _) @ Pos, R).
-  test(tTuple7, all(R = [tTuple(_, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple8, all(R = [tTuple(_, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple9, all(R = [tTuple(_, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple10, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple11, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple12, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple13, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple14, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple15, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple16, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple17, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple18, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple19, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
-  test(tTuple20, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ Pos, R).
+  test(tAny, all(R = [tAny])) :-
+    eval_expr(tAny @ [1, 1], R).
+  test(tVoid, all(R = [tVoid])) :-
+    eval_expr(tVoid @ [1, 1], R).
+  test(tInt, all(R = [tInt(_)])) :-
+    eval_expr(tInt(_) @ [1, 1], R).
+  test(tFloat, all(R = [tFloat(_)])) :-
+    eval_expr(tFloat(_) @ [1, 1], R).
+  test(tString, all(R = [tString(_)])) :-
+    eval_expr(tString(_) @ [1, 1], R).
+  test(tList, all(R = [tList(_)])) :-
+    eval_expr(tList(_) @ [1, 1], R).
+  test(tDict, all(R = [tDict(_)])) :-
+    eval_expr(tDict(_) @ [1, 1], R).
+  test(tTuple0, all(R = [tTuple])) :-
+    eval_expr(tTuple @ [1, 1], R).
+  test(tTuple1, all(R = [tTuple(_)])) :-
+    eval_expr(tTuple(_) @ [1, 1], R).
+  test(tTuple2, all(R = [tTuple(_, _)])) :-
+    eval_expr(tTuple(_, _) @ [1, 1], R).
+  test(tTuple3, all(R = [tTuple(_, _, _)])) :-
+    eval_expr(tTuple(_, _, _) @ [1, 1], R).
+  test(tTuple4, all(R = [tTuple(_, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _) @ [1, 1], R).
+  test(tTuple5, all(R = [tTuple(_, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _) @ [1, 1], R).
+  test(tTuple6, all(R = [tTuple(_, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple7, all(R = [tTuple(_, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple8, all(R = [tTuple(_, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple9, all(R = [tTuple(_, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple10, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple11, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple12, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple13, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple14, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple15, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple16, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple17, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple18, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple19, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tTuple20, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
+    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
 :- end_tests(primitive_types).
 
 :- begin_tests(expr).
@@ -130,13 +130,13 @@
 
 :- begin_tests(node).
   % file(Excmds)
-  test(file1, all(R = [tVoid @ [1,1]])) :-
+  test(file1, all(R = [tSuccess])) :-
     eval_expr(file([]) @ [1,1], R).
-  test(file2, all(R = [tVoid @ [1,1]])) :-
+  test(file2, all(R = [tSuccess])) :-
     eval_expr(file([comment("comment") @ nopos]) @ [1,1], R).
 
   % comment(Text)
-  test(comment, all(R = [tVoid @ [1,1]])) :-
+  test(comment, all(R = [tSuccess])) :-
     eval_expr(comment("this is a comment") @ [1,1], R).
 :- end_tests(node).
 
@@ -148,11 +148,10 @@
     Pos = [1, 5],
     Rhs = tInt(42) @ [1, 9],
     Results = [(ident("g", "n"), Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([Var @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let has = 42
@@ -163,19 +162,18 @@
     Pos = [1, 5],
     Rhs = tInt(42) @ [1, 11],
     Results = [(ident("g", "has"), Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","has") @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
       echo([Var @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % echo function('has')('eval')
   test(funcref1) :-
     eval_expr(file([
       echo([call(call(ident("","function") @ nopos,[tString("has") @ nopos]) @ nopos,[tString("eval") @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], tVoid @ [1,1]).
+    ]) @ [1,1], tSuccess).
 
   % let F = function('has')
   % echo F('eval')
@@ -184,11 +182,10 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(ident("g", "F"), Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let g:F = function('has')
@@ -198,11 +195,10 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(Var, Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % echo call(function('has'), ['eval'])
@@ -217,7 +213,7 @@
           ]
         ) @ [1,10]
       ]) @ [1,1]
-    ]) @ [1,1], tVoid @ [1,1]).
+    ]) @ [1,1], tSuccess).
 
   % let F = function('has')
   % echo call(F, ['eval'])
@@ -226,11 +222,10 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(ident("g", "F"), Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos,[Var @ nopos,tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   % let g:F = function('has')
@@ -240,11 +235,10 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(Var, Pos, Rhs)],
-    new_eval_env(Env),
-    eval(Env, file([
+    eval(file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos, [Var @ nopos, tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
   test(define_func) :-
@@ -254,7 +248,7 @@
     ]),
     Pos = [1, 2],
     Results = [(FuncName, Pos, Func)],
-    new_eval_env(Env), eval(Env, file([Func @ Pos]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    eval(file([Func @ Pos]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_func(RetEnv, X, Y, Z), Results).
 
 :- end_tests(excmds).
