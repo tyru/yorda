@@ -86,10 +86,10 @@ to_int(tBool(_), tInt(_)).
 to_int(tNone(_), tInt(_)).
 to_int(tAny, tInt(_)).
 
-get_prop(_, tAny, _, tAny).
-get_prop(_, _, tAny, tAny).
-get_prop(_, tDict(_), Right, tAny) :- to_string(Right, _).
-get_prop(_, tString(_), Right, tAny) :- to_int(Right, _).
+get_prop(tAny, _, tAny).
+get_prop(_, tAny, tAny).
+get_prop(tDict(_), Right, tAny) :- to_string(Right, _).
+get_prop(tString(_), Right, tAny) :- to_int(Right, _).
 
 % ===================== Built-in functions =====================
 
@@ -183,31 +183,22 @@ add_func(Env, function(Name, Params, Body) @ Pos, RetEnv) :-
   update_func(Env1, Funcs, [function(Name, Params, Body) @ Pos | Funcs], RetEnv).
 
 % add_params(+Env, +Params, -RetEnv)
-add_params(Env, [], Env).
-add_params(Env, [ident("", Name) @ Pos | Xs], RetEnv) :-
-  add_var(Env, ident("a", Name) @ Pos, _, Env1),
-  add_params(Env1, Xs, RetEnv).
+add_params(Env, Params, RetEnv) :-
+  foldl(add_param1, Params, Env, RetEnv).
+add_param1(ident("", Name) @ Pos, Env, RetEnv) :-
+  add_var(Env, ident("a", Name) @ Pos, _, RetEnv).
 
 % call_func(+Env, call(+Fun, +Args), -R)
-call_func(_, call(Args :: R @ _, Args), R) :- !.
-% Vim built-in function (e.g. has("eval"))
+call_func(_, call(Args :: R @ _, Args), R).
+% No scope, must be a Vim built-in function or a variable (e.g. has("eval"), F(42))
 call_func(Env, call(ident("", Name) @ _, Args), R) :-
-  vimfunc(Env, Name, Args :: R @ _),
+  vimfunc(Env, Name, Args :: R @ _), !;
+  add_scope(Env, Name, Scope),
+  call_func(Env, call(ident(Scope, Name) @ _, Args), R),
   !.
-% Variable is a funcref
-%
-%		" F = ident(Scope, Name) @ _
-%		let F = function('has')
-%		call F('eval')
-%		let g:has = function('has')
-%		call g:has('eval')
-%
-call_func(Env, call(ident(InScope, Name) @ _, Args), R) :-
-  (InScope = "" ->
-    % no scope, must be a vimfunc or a variable
-    (vimfunc(Env, Name, Args :: R @ _) -> !; add_scope(Env, Name, Scope));
-    Scope = InScope),
-  % must be a variable
+% A variable (with scope) is a funcref (e.g. l:F(42), g:F(42))
+call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
+  \+ Scope = "",
   eval(Env, ident(Scope, Name) @ _, Env, FunT @ _),
   call_func(Env, call(FunT @ _, Args), R),
   !.
@@ -218,8 +209,7 @@ call_func(Env, call(ident(InScope, Name) @ _, Args), R) :-
 %
 call_func(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args), R) :-
   call_func(Env, call(ident(Scope, Name) @ _, InnerArgs), FunT),
-  call_func(Env, call(FunT @ _, Args), R),
-  !.
+  call_func(Env, call(FunT @ _, Args), R).
 
 % add_var(+Env, ident(+Scope, +Name) @ +Pos, +Rhs, -RetEnv)
 add_var(Env, ident("", Name) @ Pos, Rhs, RetEnv) :-
@@ -250,29 +240,29 @@ get_var(Env, ident(InScope, Name), Pos, Rhs) :-
 
 % add_scope(+Env, +Name, -Scope)
 add_scope(Env, Name, Scope) :-
-  nonvar(Env), nonvar(Name),
   compat(Name, Scope, _), !;
   get_level(Env, Lv),
   Lv > 0 -> Scope = "l"; Scope = "g".
 
 % ===================== Vim script syntax =====================
 
+:- discontiguous(eval/4).
+
 % For convenience
 eval_expr(T, R) :- new_env(Env), eval(Env, T, Env, R).
 eval_expr(Env, T, R) :- eval(Env, T, Env, R).
 
+eval_excmds(Env, Excmds, RetEnv) :-
+  foldl(eval_block, Excmds, Env, RetEnv).
+eval_block(Excmd, Env, RetEnv) :-
+  eval(Env, Excmd, RetEnv, tVoid @ _).
+
 % Primitive types (with position)
 eval(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
 
-eval(Env, block([]) @ Pos, Env, tVoid @ Pos).
-eval(Env, block([Excmd @ ExcmdPos | Xs]) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval(Env, Excmd @ ExcmdPos, Env1, tVoid @ _),
-  eval(Env1, block(Xs) @ Pos, RetEnv, tVoid @ Pos),
-  !.
-
 % eval(+Env, file(+Excmds) @ +Pos, -RetEnv, -R)
 eval(Env, file(Body) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval(Env, block(Body) @ Pos, RetEnv, tVoid @ Pos),
+  eval_excmds(Env, Body, RetEnv),
   !.
 
 % eval(+Env, comment(+Text) @ +Pos, -Env, -R)
@@ -285,9 +275,10 @@ eval(_, excmd(_) @ Pos, _, tVoid @ Pos).
 % eval(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv, -R)
 eval(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-
   add_func(Env, function(Name, Params, Body) @ Pos, Env1),
-  eval(Env1, block(Body) @ Pos, RetEnv, tVoid @ Pos),
+  eval_excmds(Env1, Body, RetEnv),
   !.
 
+% eval(+Env, excall(+FuncCall) @ +Pos, -Env, -R)
 eval(Env, excall(FuncCall) @ Pos, Env, tVoid @ Pos) :-
   eval_expr(Env, FuncCall, _),
   !.
@@ -307,7 +298,7 @@ eval(Env, let(Lhs, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
 eval(Env, if(Cond, Body) @ Pos, RetEnv, tVoid @ Pos) :-
   eval_expr(Env, Cond, R @ _),
   to_bool(R, _),
-  eval(Env, block(Body) @ Pos, RetEnv, tVoid @ _),
+  eval_excmds(Env, Body, RetEnv),
   !.
 
 % TODO
@@ -325,7 +316,7 @@ eval(Env, echo(ExprList) @ Pos, Env, tVoid @ Pos) :-
 eval(Env, subscript(Left @ _, Right @ _) @ Pos, Env, R @ Pos) :-
   eval_expr(Env, Left @ _, Left1 @ _),
   eval_expr(Env, Right @ _, Right1 @ _),
-  get_prop(Env, Left1, Right1, R),
+  get_prop(Left1, Right1, R),
   !.
 
 % eval(+Env, dot(+Left, +Right) @ +Pos, -Env, -R)
