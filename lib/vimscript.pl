@@ -5,10 +5,9 @@
   (@)/2,
   op(700, xfy, =>),
   (=>)/2,
-  new_env/1,
-  eval_expr/2,
-  eval_expr/3,
-  eval/4
+  new_eval_env/1,
+  eval/3,
+  eval_expr/2
 ]).
 
 % ===================== Operators =====================
@@ -23,6 +22,17 @@
 % ===================== Utilities =====================
 
 empty([]).
+
+% update_assoc_list(+Elem, ?List, +Updated, -UpdatedList)
+%
+% NOTE: Elem must be matched to one or zero elements in List.
+% update_assoc_list(N, [1,2,3,1], M, L).
+% N = 1, L = [M,2,3,M]
+%
+update_assoc_list(Elem, List, Updated, UpdatedList) :-
+  maplist(update(Elem, Updated), List, UpdatedList).
+update(Elem, Updated, Elem, Updated).
+update(X, _, Y, Y) :- \+ X = Y.
 
 % ===================== Primitive types =====================
 
@@ -130,8 +140,8 @@ vimfunc(Env, "call", [X, tList(Args) @ _, Self] :: R @ _) :-
   vimfunc(NextEnv, "call", [X, tList(Args) @ _] :: R @ _),
   !.
 % call(Fun, Args)
-vimfunc(Env, "call", [Fun, tList(Args) @ _] :: R @ _) :-
-  eval(Env, call(Fun, Args) @ _, _, R @ _),
+vimfunc(_, "call", [Fun, tList(Args) @ _] :: R @ _) :-
+  R = call(Fun, Args),
   !.
 % Name must not be a variable, and must be a vimfunc.
 vimfunc(_, "function", [tString(Name) @ _] :: R @ _) :-
@@ -139,7 +149,7 @@ vimfunc(_, "function", [tString(Name) @ _] :: R @ _) :-
   R = _ :: _,
   !.
 vimfunc(Env, "function", [tString(Name) @ _] :: FunT @ _) :-
-  not(var(Name)),
+  nonvar(Name),
   vimfunc(Env, Name, FunT @ _),
   !.
 % tr(tString, tString, tString) = tString
@@ -159,36 +169,47 @@ compat("version", "v", tInt(_)) :- !.         % v:version
 
 % ===================== Env =====================
 
-% new_env(-Env)
-new_env([hooks:[], lv:0, vars:[], funcs:[]]).
+% new_eval_env(-Env)
+new_eval_env(Env) :-
+  new_env(E1),
+  add_hooks(E1, [on_leave:on_let_enter, on_leave:on_function_enter], E2),
+  append(E2, [stack:[42], lv:0, vars:[], funcs:[]], Env).
 
-% run_hook(+Env, +Hook)
-run_hook(_, _).
+% get_result(+Env, -Result)
+get_result(Env, Top) :- member(stack:[Top | _], Env).
+
+% eval(+Env, +Node, -RetEnv, -Result)
+eval(Node, RetEnv, Result) :-
+  new_eval_env(Env),
+  eval(Env, Node, RetEnv, Result).
+
+% eval_expr(+Node, -Result)
+eval_expr(Node, Result) :- new_eval_env(Env), eval(Env, Node, Env, Result).
+
+% ----------------- private -----------------
+
+eval(Env, Node, RetEnv, Result) :-
+  traverse(Env, Node, RetEnv),
+  get_result(RetEnv, Result).
+
+eval_expr(Env, Node, Result) :- eval(Env, Node, Env, Result).
 
 % get_level(+Env, -Lv)
-get_level([hooks:_, lv:Lv, vars:_, funcs:_], Lv).
+get_level(Env, Lv) :- member(lv:Lv, Env).
 
 % get_vars(+Env, -Vars)
-get_vars([hooks:_, lv:_, vars:Vars, funcs:_], Vars).
-
-% update_var(+Env, +Vars, -UpdateVars, -RetEnv)
-update_var(
-  [hooks:Hooks, lv:Lv, vars:Vars, funcs:Funcs],
-  Vars,
-  UpdateVars,
-  [hooks:Hooks, lv:Lv, vars:UpdateVars, funcs:Funcs]
-).
-
-% update_func(+Env, +Funcs, -UpdateFuncs, -RetEnv)
-update_func(
-  [hooks:Hooks, lv:Lv, vars:Vars, funcs:Funcs],
-  Funcs,
-  UpdateFuncs,
-  [hooks:Hooks, lv:Lv, vars:Vars, funcs:UpdateFuncs]
-).
+get_vars(Env, Vars) :- member(vars:Vars, Env).
 
 % get_funcs(+Env, -Funcs)
-get_funcs([hooks:_, lv:_, vars:_, funcs:Funcs], Funcs).
+get_funcs(Env, Funcs) :- member(funcs:Funcs, Env).
+
+% update_var(+Env, +Vars, -UpdateVars, -RetEnv)
+update_var(Env, Vars, UpdateVars, RetEnv) :-
+  update_assoc_list(vars:Vars, Env, UpdateVars, RetEnv).
+
+% update_func(+Env, +Funcs, -UpdateFuncs, -RetEnv)
+update_func(Env, Funcs, UpdateFuncs, RetEnv) :-
+  update_assoc_list(funcs:Funcs, Env, UpdateFuncs, RetEnv).
 
 % add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 add_func(Env, function(Name, Params, Body) @ Pos, RetEnv) :-
@@ -212,7 +233,7 @@ call_func(Env, call(ident("", Name) @ _, Args), R) :-
 % A variable (with scope) is a funcref (e.g. l:F(42), g:F(42))
 call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
   \+ Scope = "",
-  eval_expr(Env, ident(Scope, Name) @ _, FunT @ _),
+  eval(Env, ident(Scope, Name) @ _, _, FunT @ _),
   call_func(Env, call(FunT @ _, Args), R),
   !.
 % Expression is a funcref
@@ -232,7 +253,7 @@ add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv) :-
   \+ Scope = "",
   update_var(Env, Vars, [ident(Scope, Name) @ Pos => Rhs | Vars], RetEnv).
 
-% get_var(+Env, ident(?Scope, ?Name), ?Pos, ?Rhs)
+% get_var(+Env, ident(?Scope, ?Name), -Pos, -Rhs)
 %
 % Look up ident variable from env.
 % variables and functions have different namespace.
@@ -263,110 +284,98 @@ get_func(Env, ident(Scope, Name), Pos, Func) :-
   Func = function(ident(Scope, Name) @ _, _, _),
   member(Func @ Pos, Funcs).
 
-% ===================== Vim script syntax =====================
+% ===================== Evaluation functions =====================
 
-% eval_expr(+T, -R)
-eval_expr(T, R) :- new_env(Env), eval(Env, T, Env, R).
-% eval_expr(+Env, +T, -R)
-eval_expr(Env, T, R) :- eval(Env, T, Env, R).
-
-% eval_excmds(+Env, +Excmds, -RetEnv)
-eval_excmds(Env, Excmds, RetEnv) :-
-  foldl(eval_excmd1, Excmds, Env, RetEnv).
-eval_excmd1(Excmd, Env, RetEnv) :-
-  eval(Env, Excmd, RetEnv, tVoid @ _).
-
-% eval(+Env, +T, -RetEnv, -R)
-eval(Env, T, RetEnv, R) :-
-  run_hook(Env, on_enter),
-  traverse(Env, T, RetEnv, R),
-  run_hook(RetEnv, on_leave),
+% TODO destructuring, subscript, dot, ...
+on_let_enter(Env, let(Lhs, Op, Rhs) @ _, _, RetEnv) :-
+  add_var(Env, Lhs, [Op, Rhs], RetEnv),
   !.
+on_function_enter(Env, function(Name, Params, Body) @ Pos, _, RetEnv) :-
+  add_func(Env, function(Name, Params, Body) @ Pos, RetEnv),
+  !.
+
+% ===================== Traversal functions =====================
+
+% new_env(-Env)
+new_env([hooks:[]]).
+
+% get_hooks(+Env, -Hooks)
+get_hooks(Env, Hooks) :- member(hooks:Hooks, Env).
+% add_hooks(+Env, +FuncList, -RetEnv)
+add_hooks(Env, FuncList, RetEnv) :-
+  update_assoc_list(hooks:Hooks, Env, hooks:Added, RetEnv),
+  append(FuncList, Hooks, Added).
+
+% run_hook(+Env, +Node, +Event, -RetEnv)
+run_hook(Env, Node, Event, RetEnv) :-
+  get_hooks(Env, Hooks),
+  findall(Func, member(Event:Func, Hooks), FuncList),
+  foldl(do_run_hook(Node, Event), FuncList, Env, RetEnv).
+do_run_hook(Node, Event, Func, Env, RetEnv) :-
+  call(Func, Env, Node, Event, RetEnv); RetEnv = Env.
+
+% traverse(+Env, +Node, -RetEnv)
+traverse(Env, Node, RetEnv) :-
+  run_hook(Env, Node, on_enter, E1),
+  trav(E1, Node, E2),
+  run_hook(E2, Node, on_leave, RetEnv).
+
+% traverse_list(+Env, +NodeList, -RetEnv)
+traverse_list(Env, NodeList, RetEnv) :- foldl(esrevart, NodeList, Env, RetEnv).
+esrevart(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
 
 % Primitive types (with position)
-traverse(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T, !.
+trav(Env, Node @ _, Env) :- prim(Node), !.
 
-% traverse(+Env, file(+Excmds) @ +Pos, -RetEnv, -R)
-traverse(Env, file(Body) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval_excmds(Env, Body, RetEnv),
-  !.
+% trav(+Env, file(+Excmds) @ +Pos, -RetEnv)
+trav(Env, file(Body) @ _, RetEnv) :- traverse_list(Env, Body, RetEnv), !.
 
 % TODO type comment
-% traverse(+Env, comment(+Text) @ +Pos, -Env, -R)
-traverse(Env, comment(_) @ Pos, Env, tVoid @ Pos) :- !.
+% trav(+Env, comment(+Text) @ +Pos, -RetEnv)
+trav(Env, comment(_) @ _, Env) :- !.
 
 % TODO analyze arguments of excmd
-% traverse(+Env, excmd(+Command) @ +Pos, -RetEnv, -R)
-traverse(Env, excmd(_) @ Pos, Env, tVoid @ Pos) :- !.
+% trav(+Env, excmd(+Command) @ +Pos, -RetEnv)
+trav(Env, excmd(_) @ _, Env) :- !.
 
-% traverse(+Env, return(+Expr) @ +Pos, -RetEnv, -R)
-traverse(Env, return(Expr) @ Pos, Env, tVoid @ Pos) :-
-  eval_expr(Env, Expr, _),
-  !.
+% trav(+Env, return(+Expr) @ +Pos, -RetEnv)
+trav(Env, return(Expr) @ _, RetEnv) :- traverse(Env, Expr, RetEnv), !.
 
-% traverse(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv, -R)
-traverse(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-
-  add_func(Env, function(Name, Params, Body) @ Pos, Env1),
-  eval_excmds(Env1, Body, RetEnv),
+% trav(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
+trav(Env, function(Name, Params, Body) @ _, RetEnv) :-
+  append([Name | Params], Body, L),
+  traverse_list(Env, L, RetEnv),
   !.
 
-% traverse(+Env, excall(+FuncCall) @ +Pos, -Env, -R)
-traverse(Env, excall(FuncCall) @ Pos, Env, tVoid @ Pos) :-
-  eval_expr(Env, FuncCall, _),
-  !.
+% trav(+Env, excall(+FuncCall) @ +Pos, -RetEnv)
+trav(Env, excall(FuncCall) @ _, RetEnv) :- traverse(Env, FuncCall, RetEnv), !.
 
-% traverse(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, -RetEnv, -R)
-traverse(Env, let(Lhs, -=, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
-  Value = op(Lhs, -, Rhs),
-  traverse(Env, let(Lhs, =, Value) @ LetPos, RetEnv, tVoid @ LetPos),
-  !.
-traverse(Env, let(Lhs, =, Rhs) @ LetPos, RetEnv, tVoid @ LetPos) :-
-  (Lhs = ident(Scope, Name) @ IdentPos ->
-    add_var(Env, ident(Scope, Name) @ IdentPos, Rhs, RetEnv);
-    true),    % TODO subscript, dot, ...
-  !.
+% trav(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, -RetEnv)
+trav(Env, let(Lhs, _, Rhs) @ _, RetEnv) :- traverse_list(Env, [Lhs, Rhs], RetEnv), !.
 
-% traverse(+Env, if(+Cond, +Body) @ +Pos, -RetEnv, -R)
-traverse(Env, if(Cond, Body) @ Pos, RetEnv, tVoid @ Pos) :-
-  eval_expr(Env, Cond, R @ _),
-  to_bool(R, _),
-  eval_excmds(Env, Body, RetEnv),
-  !.
+% trav(+Env, if(+Cond, +Body) @ +Pos, -RetEnv)
+trav(Env, if(Cond, Body) @ _, RetEnv) :- traverse_list(Env, [Cond | Body], RetEnv), !.
 
 % TODO
-% traverse(+Env, if(+Cond, +Body, else(+ElseBody)) @ +Pos, -RetEnv, -R)
-% traverse(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...])) @ +Pos, -RetEnv, -R)
-% traverse(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...]), else(+ElseBody)) @ +Pos, -RetEnv, -R)
+% trav(+Env, if(+Cond, +Body, else(+ElseBody)) @ +Pos, -RetEnv)
+% trav(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...])) @ +Pos, -RetEnv)
+% trav(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...]), else(+ElseBody)) @ +Pos, -RetEnv)
 
-% traverse(+Env, echo(+ExprList) @ +Pos, -Env, -R)
-traverse(Env, echo(ExprList) @ Pos, Env, tVoid @ Pos) :-
-  maplist(eval_expr(Env), ExprList, _),
-  !.
+% trav(+Env, echo(+ExprList) @ +Pos, -RetEnv)
+trav(Env, echo(ExprList) @ _, RetEnv) :- traverse_list(Env, ExprList, RetEnv), !.
 
 % TODO
-% traverse(+Env, subscript(+Left, +Right) @ +Pos, -Env, -R)
-traverse(Env, subscript(Left @ _, Right @ _) @ Pos, Env, R @ Pos) :-
-  eval_expr(Env, Left @ _, Left1 @ _),
-  eval_expr(Env, Right @ _, Right1 @ _),
-  get_prop(Left1, Right1, R),
-  !.
+% trav(+Env, subscript(+Left, +Right) @ +Pos, -RetEnv)
+trav(Env, subscript(Left, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
 
-% traverse(+Env, dot(+Left, +Right) @ +Pos, -Env, -R)
-traverse(Env, dot(Left @ _, ident(_, Name) @ _) @ Pos, Env, R @ Pos) :-
-  eval_expr(Env, Left @ _, Left1 @ _),
-  get_prop(Left1, tString(Name), R),
-  !.
+% trav(+Env, dot(+Left, +Right) @ +Pos, -RetEnv)
+trav(Env, dot(Left, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
 
-% TODO
-% traverse(+Env, op(+Left, +Op, +Right) @ +Pos, -Env, -R)
-traverse(Env, op(_, ==, _) @ Pos, Env, tInt(_) @ Pos) :- !.
+% trav(+Env, op(+Left, +Op, +Right) @ +Pos, -RetEnv)
+trav(Env, op(Left, _, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
 
-% traverse(+Env, call(+Fun, +Args) @ +Pos, -Env, -R)
-traverse(Env, call(Fun, Args) @ CallPos, Env, R @ CallPos) :-
-  call_func(Env, call(Fun, Args), R),
-  !.
+% trav(+Env, call(+Fun, +Args) @ +Pos, -RetEnv)
+trav(Env, call(Fun, Args) @ _, RetEnv) :- traverse_list(Env, [Fun | Args], RetEnv), !.
 
-% traverse(+Env, ident(+Scope, +Name) @ +Pos, -Env, -R)
-traverse(Env, ident(Scope, Name) @ Pos, Env, Rhs @ Pos) :-
-  get_var(Env, ident(Scope, Name), _, Rhs @ _),
-  !.
+% trav(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
+trav(Env, ident(_, _) @ _, Env) :- !.

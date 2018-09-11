@@ -148,7 +148,7 @@
     Pos = [1, 5],
     Rhs = tInt(42) @ [1, 9],
     Results = [(ident("g", "n"), Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([Var @ nopos]) @ nopos
@@ -163,7 +163,7 @@
     Pos = [1, 5],
     Rhs = tInt(42) @ [1, 11],
     Results = [(ident("g", "has"), Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","has") @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos,
@@ -184,7 +184,7 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(ident("g", "F"), Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
@@ -198,7 +198,7 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(Var, Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(Var @ nopos, [tString("eval") @ nopos]) @ nopos]) @ nopos
@@ -226,7 +226,7 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(ident("g", "F"), Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos,[Var @ nopos,tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
@@ -240,7 +240,7 @@
     Pos = [3, 5],
     Rhs = call(ident("","function") @ [3,9],[tString("has") @ [3,18]]) @ [3,17],
     Results = [(Var, Pos, Rhs)],
-    new_env(Env),
+    new_eval_env(Env),
     eval(Env, file([
       let(Var @ Pos, =, Rhs) @ nopos,
       echo([call(ident("","call") @ nopos, [Var @ nopos, tList([tString("eval") @ nopos]) @ nopos]) @ nopos]) @ nopos
@@ -254,7 +254,7 @@
     ]),
     Pos = [1, 2],
     Results = [(FuncName, Pos, Func)],
-    new_env(Env), eval(Env, file([Func @ Pos]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    new_eval_env(Env), eval(Env, file([Func @ Pos]) @ [1,1], RetEnv, tVoid @ [1,1]),
     findall((X, Y, Z), vimscript:get_func(RetEnv, X, Y, Z), Results).
 
 :- end_tests(excmds).
