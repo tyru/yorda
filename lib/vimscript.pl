@@ -160,22 +160,35 @@ compat("version", "v", tInt(_)) :- !.         % v:version
 % ===================== Env =====================
 
 % new_env(-Env)
-new_env([lv:0, vars:[], funcs:[]]).
+new_env([hooks:[], lv:0, vars:[], funcs:[]]).
+
+% run_hook(+Env, +Hook)
+run_hook(_, _).
 
 % get_level(+Env, -Lv)
-get_level([lv:Lv, vars:_, funcs:_], Lv).
+get_level([hooks:_, lv:Lv, vars:_, funcs:_], Lv).
 
 % get_vars(+Env, -Vars)
-get_vars([lv:_, vars:Vars, funcs:_], Vars).
+get_vars([hooks:_, lv:_, vars:Vars, funcs:_], Vars).
 
 % update_var(+Env, +Vars, -UpdateVars, -RetEnv)
-update_var([lv:Lv, vars:Vars, funcs:Funcs], Vars, UpdateVars, [lv:Lv, vars:UpdateVars, funcs:Funcs]).
+update_var(
+  [hooks:Hooks, lv:Lv, vars:Vars, funcs:Funcs],
+  Vars,
+  UpdateVars,
+  [hooks:Hooks, lv:Lv, vars:UpdateVars, funcs:Funcs]
+).
 
 % update_func(+Env, +Funcs, -UpdateFuncs, -RetEnv)
-update_func([lv:Lv, vars:Vars, funcs:Funcs], Funcs, UpdateFuncs, [lv:Lv, vars:Vars, funcs:UpdateFuncs]).
+update_func(
+  [hooks:Hooks, lv:Lv, vars:Vars, funcs:Funcs],
+  Funcs,
+  UpdateFuncs,
+  [hooks:Hooks, lv:Lv, vars:Vars, funcs:UpdateFuncs]
+).
 
 % get_funcs(+Env, -Funcs)
-get_funcs([lv:_, vars:_, funcs:Funcs], Funcs).
+get_funcs([hooks:_, lv:_, vars:_, funcs:Funcs], Funcs).
 
 % add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 add_func(Env, function(Name, Params, Body) @ Pos, RetEnv) :-
@@ -219,7 +232,7 @@ add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv) :-
   \+ Scope = "",
   update_var(Env, Vars, [ident(Scope, Name) @ Pos => Rhs | Vars], RetEnv).
 
-% get_var(+Env, ident(?Scope, ?Name), +Pos, -Rhs)
+% get_var(+Env, ident(?Scope, ?Name), ?Pos, ?Rhs)
 %
 % Look up ident variable from env.
 % variables and functions have different namespace.
@@ -244,8 +257,11 @@ add_scope(Env, Name, Scope) :-
   get_level(Env, Lv),
   Lv > 0 -> Scope = "l"; Scope = "g".
 
-% run_hook(+Env, +Hook)
-run_hook(_, _).
+% get_func(+Env, ident(?Scope, ?Name), ?Pos, ?Func)
+get_func(Env, ident(Scope, Name), Pos, Func) :-
+  get_funcs(Env, Funcs),
+  Func = function(ident(Scope, Name) @ _, _, _),
+  member(Func @ Pos, Funcs).
 
 % ===================== Vim script syntax =====================
 
@@ -268,19 +284,25 @@ eval(Env, T, RetEnv, R) :-
   !.
 
 % Primitive types (with position)
-traverse(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T.
+traverse(Env, T @ Pos, Env, R @ Pos) :- prim(T), R = T, !.
 
 % traverse(+Env, file(+Excmds) @ +Pos, -RetEnv, -R)
 traverse(Env, file(Body) @ Pos, RetEnv, tVoid @ Pos) :-
   eval_excmds(Env, Body, RetEnv),
   !.
 
+% TODO type comment
 % traverse(+Env, comment(+Text) @ +Pos, -Env, -R)
-traverse(Env, comment(_) @ Pos, Env, tVoid @ Pos).
+traverse(Env, comment(_) @ Pos, Env, tVoid @ Pos) :- !.
 
 % TODO analyze arguments of excmd
 % traverse(+Env, excmd(+Command) @ +Pos, -RetEnv, -R)
-traverse(_, excmd(_) @ Pos, _, tVoid @ Pos).
+traverse(Env, excmd(_) @ Pos, Env, tVoid @ Pos) :- !.
+
+% traverse(+Env, return(+Expr) @ +Pos, -RetEnv, -R)
+traverse(Env, return(Expr) @ Pos, Env, tVoid @ Pos) :-
+  eval_expr(Env, Expr, _),
+  !.
 
 % traverse(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv, -R)
 traverse(Env, function(Name, Params, Body) @ Pos, RetEnv, tVoid @ Pos) :-

@@ -247,6 +247,16 @@
     ]) @ [1,1], RetEnv, tVoid @ [1,1]),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
+  test(define_func) :-
+    FuncName = ident("s","id"),
+    Func = function(FuncName @ nopos,[ident("","x") @ [1,16]],[
+      return(ident("a","x") @ nopos) @ nopos
+    ]),
+    Pos = [1, 2],
+    Results = [(FuncName, Pos, Func)],
+    new_env(Env), eval(Env, file([Func @ Pos]) @ [1,1], RetEnv, tVoid @ [1,1]),
+    findall((X, Y, Z), vimscript:get_func(RetEnv, X, Y, Z), Results).
+
 :- end_tests(excmds).
 
 :- run_tests.
