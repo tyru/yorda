@@ -1,10 +1,6 @@
-" @param {Dict} wg
-" @param {Int} index
-" @returns {tInt}
-function! s:_notify_done(wg, index, value) abort
-  let a:wg.results[a:index] = a:value
-  let a:wg.remaining -= 1
-  if a:wg.remaining == 0
-    call a:wg.resolve(a:wg.results)
-  endif
+" @param {Dict} dict
+" @param {String} key
+" @returns {Int}
+function! s:f(dict, key) abort
+  return a:dict[a:key]
 endfunction
