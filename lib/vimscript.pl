@@ -5,8 +5,7 @@
   (@)/2,
   op(700, xfy, =>),
   (=>)/2,
-  eval/3,
-  eval_expr/2
+  eval/3
 ]).
 
 % ===================== Operators =====================
@@ -176,10 +175,7 @@ compat("version", "v", tInt(_)) :- !.         % v:version
 % eval(+Node, -RetEnv, -Result)
 eval(Node, RetEnv, Result) :-
   new_eval_env(Env),
-  eval(Env, Node, RetEnv, Result).
-
-% eval_expr(+Node, -Result)
-eval_expr(Node, Result) :- new_eval_env(Env), eval(Env, Node, Env, Result).
+  eval(Env, Node, RetEnv, Result), !.
 
 % ----------------- private -----------------
 
@@ -189,8 +185,6 @@ eval(Env, Node, RetEnv, Result) :-
   (\+ empty(Stack) ->
     pop(E1, Result, RetEnv);
     (RetEnv, Result) = (E1, tSuccess)).
-
-eval_expr(Env, Node, Result) :- eval(Env, Node, Env, Result).
 
 % new_eval_env(-Env)
 new_eval_env(Env) :-
@@ -307,9 +301,8 @@ on_let_enter(Env, let(Lhs, =, Rhs) @ _, on_enter, RetEnv) :-
 on_function_enter(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
   add_func(Env, function(Name, Params, Body) @ Pos, RetEnv), !.
 
-do_eval(Env, Node @ _, on_leave, RetEnv) :-
-  push(Env, Node, E1),
-  reduce(E1, RetEnv).
+do_eval(Env, Node, on_leave, RetEnv) :-
+  push(Env, Node, E1), reduce(E1, RetEnv).
 
 reduce(Env, RetEnv) :-
   get_stack(Env, Stack),
@@ -320,51 +313,51 @@ reduce(Env, RetEnv) :-
 % ------- reduce(+Env, +Node, +Stack, -RetStack) -------
 
 % Push primitive values as-is.
-% reduce(_, [T | Stack], [T | Stack]) :- prim(T), !.
+% reduce(_, [T @ _ | Stack], [T @ _ | Stack]) :- prim(T), !.
 
-reduce(_, [file(_) | Stack], Stack) :- !.
+reduce(_, [file(_) @ _ | Stack], Stack) :- !.
 
-reduce(_, [comment(_) | Stack], Stack) :- !.
+reduce(_, [comment(_) @ _ | Stack], Stack) :- !.
 
-reduce(_, [excmd(_) | Stack], Stack) :- !.
+reduce(_, [excmd(_) @ _ | Stack], Stack) :- !.
 
-reduce(_, [return(_), _ | Stack], Stack) :- !.
+reduce(_, [return(_) @ _, _ | Stack], Stack) :- !.
 
-reduce(_, [function(_, ParamsOrig, _), Stack], RetStack) :-
+reduce(_, [function(_, ParamsOrig, _) @ _, Stack], RetStack) :-
   length(ParamsOrig, ParamsN),
   N is 1 + ParamsN,    % Name + Params
   split_list(N, Stack, _, RetStack), !.
 
-reduce(_, [excall(_), _ | Stack], Stack) :- !.
+reduce(_, [excall(_) @ _, _ | Stack], Stack) :- !.
 
 % TODO destructuring, subscript, dot, ...
-reduce(_, [let(_, _, _), _, _ | Stack], Stack) :- !.
+reduce(_, [let(_, _, _) @ _, _, _ | Stack], Stack) :- !.
 
-reduce(_, [if(_, _), _ | Stack], Stack) :- !.
+reduce(_, [if(_, _) @ _, _ | Stack], Stack) :- !.
 
-reduce(_, [echo(ExprList) | Stack], RetStack) :-
+reduce(_, [echo(ExprList) @ _ | Stack], RetStack) :-
   length(ExprList, N),
   split_list(N, Stack, _, RetStack), !.
 
-reduce(_, [subscript(_, _), Right, Left | Stack], [Value | Stack]) :-
+reduce(_, [subscript(_, _) @ Pos, Right @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
   get_prop(Left, Right, Value), !.
 
-reduce(_, [dot(_, _), ident(_, Name), Left | Stack], [Value | Stack]) :-
+reduce(_, [dot(_, _) @ Pos, ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
   get_prop(Left, tString(Name), Value), !.
 
 % TODO check lhs, rhs types
 % TODO other ops
-reduce(_, [op(_, ==, _), _, _ | Stack], [tInt(_) | Stack]) :- !.
+reduce(_, [op(_, ==, _) @ Pos, _, _ | Stack], [tInt(_) @ Pos | Stack]) :- !.
 
-reduce(Env, [call(_, ArgsOrig) | Stack], RetStack) :-
+reduce(Env, [call(_, ArgsOrig) @ Pos | Stack], RetStack) :-
   length(ArgsOrig, Arity),
   N is 1 + Arity,    % Fun + Args
   split_list(N, Stack, [Fun | Args], S1),
   call_func(Env, call(Fun, Args), Value),
-  RetStack = [Value | S1], !.
+  RetStack = [Value @ Pos | S1], !.
 
 % Push ident as-is.
-% reduce(_, [ident(Scope, Name), Stack], [ident(Scope, Name), Stack]) :- !.
+% reduce(_, [ident(Scope, Name) @ Pos, Stack], [ident(Scope, Name) @ Pos, Stack]) :- !.
 
 % ===================== Traversal functions =====================
 

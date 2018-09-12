@@ -2,142 +2,184 @@
 :- use_module(vimscript).
 
 :- begin_tests(error).
-  test(no_such_term) :- not(eval_expr(foobar, _)).
-  test(not_equal) :- not(eval_expr(tInt(42), tInt(999))).
+  test(no_such_term) :- \+ eval(foobar, _, _).
+  test(not_equal) :- eval(tInt(42) @ nopos, _, R), \+ R = tInt(999) @ nopos.
 :- end_tests(error).
 
 :- begin_tests(primitive_types).
-  test(tAny, all(R = [tAny])) :-
-    eval_expr(tAny @ [1, 1], R).
-  test(tVoid, all(R = [tVoid])) :-
-    eval_expr(tVoid @ [1, 1], R).
-  test(tInt, all(R = [tInt(_)])) :-
-    eval_expr(tInt(_) @ [1, 1], R).
-  test(tFloat, all(R = [tFloat(_)])) :-
-    eval_expr(tFloat(_) @ [1, 1], R).
-  test(tString, all(R = [tString(_)])) :-
-    eval_expr(tString(_) @ [1, 1], R).
-  test(tList, all(R = [tList(_)])) :-
-    eval_expr(tList(_) @ [1, 1], R).
-  test(tDict, all(R = [tDict(_)])) :-
-    eval_expr(tDict(_) @ [1, 1], R).
-  test(tTuple0, all(R = [tTuple])) :-
-    eval_expr(tTuple @ [1, 1], R).
-  test(tTuple1, all(R = [tTuple(_)])) :-
-    eval_expr(tTuple(_) @ [1, 1], R).
-  test(tTuple2, all(R = [tTuple(_, _)])) :-
-    eval_expr(tTuple(_, _) @ [1, 1], R).
-  test(tTuple3, all(R = [tTuple(_, _, _)])) :-
-    eval_expr(tTuple(_, _, _) @ [1, 1], R).
-  test(tTuple4, all(R = [tTuple(_, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _) @ [1, 1], R).
-  test(tTuple5, all(R = [tTuple(_, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _) @ [1, 1], R).
-  test(tTuple6, all(R = [tTuple(_, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple7, all(R = [tTuple(_, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple8, all(R = [tTuple(_, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple9, all(R = [tTuple(_, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple10, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple11, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple12, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple13, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple14, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple15, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple16, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple17, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple18, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple19, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
-  test(tTuple20, all(R = [tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)])) :-
-    eval_expr(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1], R).
+  test(tAny) :-
+    Value = tAny @ [1, 1],
+    eval(Value, _, Value).
+  test(tVoid) :-
+    Value = tVoid @ [1, 1],
+    eval(Value, _, Value).
+  test(tInt) :-
+    Value = tInt(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tFloat) :-
+    Value = tFloat(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tString) :-
+    Value = tString(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tList) :-
+    Value = tList(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tDict) :-
+    Value = tDict(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple0) :-
+    Value = tTuple @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple1) :-
+    Value = tTuple(_) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple2) :-
+    Value = tTuple(_, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple3) :-
+    Value = tTuple(_, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple4) :-
+    Value = tTuple(_, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple5) :-
+    Value = tTuple(_, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple6) :-
+    Value = tTuple(_, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple7) :-
+    Value = tTuple(_, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple8) :-
+    Value = tTuple(_, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple9) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple10) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple11) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple12) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple13) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple14) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple15) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple16) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple17) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple18) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple19) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
+  test(tTuple20) :-
+    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    eval(Value, _, Value).
 :- end_tests(primitive_types).
 
 :- begin_tests(expr).
   % abs(42) == 42
   test(call_abs_int) :-
-    eval_expr(
+    eval(
       call(ident("","abs") @ nopos, [tInt(42) @ nopos]) @ [1,1],
+      _,
       tInt(42) @ [1,1]).
   % abs(12.34) == 12.34
   test(call_abs_float) :-
-    eval_expr(
+    eval(
       call(ident("","abs") @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
+      _,
       tFloat(12.34) @ [1,1]).
   % abs(<tInt>) != <tFloat>
   test(call_abs_fail1) :-
-    not(eval_expr(
+    eval(
       call(ident("","abs") @ nopos, [tInt(42) @ nopos]) @ [1,1],
-      tFloat(_) @ [1,1])).
+      _,
+      R),
+    \+ R = tFloat(_) @ [1,1].
   % abs(<tFloat>) != <tInt>
   test(call_abs_fail2) :-
-    not(eval_expr(
+    eval(
       call(ident("","abs") @ nopos, [tFloat(12.34) @ nopos]) @ [1,1],
-      tInt(_) @ [1,1])).
+      _,
+      R),
+    \+ R = tInt(_) @ [1,1].
   % acos(0.0) == 1.570796
   test(call_acos) :-
-    eval_expr(
+    eval(
       call(ident("","acos") @ nopos, [tFloat(0) @ nopos]) @ [1,1],
+      _,
       tFloat(1.570796) @ [1,1]).
   % add([], 42) == [42]
   test(call_add) :-
-    eval_expr(
+    eval(
       call(ident("","add") @ nopos, [tList([]) @ nopos, tInt(42) @ [1,5]]) @ [1,1],
+      _,
       tList([tInt(42) @ [1,5]]) @ [1,1]).
   % and(1, 1) == 1
   test(call_and) :-
-    eval_expr(
+    eval(
       call(ident("","and") @ nopos, [tInt(1) @ nopos, tInt(1) @ nopos]) @ [1,1],
+      _,
       tInt(1) @ [1,1]).
   % append(1, "foo") == 0
   test(call_append) :-
-    eval_expr(
+    eval(
       call(ident("","append") @ nopos, [tInt(1) @ nopos, tString("foo") @ nopos]) @ [1,1],
+      _,
       tInt(0) @ [1,1]).
   % append(".", "foo") == 0
   test(call_append) :-
-    eval_expr(
+    eval(
       call(ident("","append") @ nopos, [tString(".") @ nopos, tString("foo") @ nopos]) @ [1,1],
+      _,
       tInt(0) @ [1,1]).
   % append(1, []) == 0
   test(call_append) :-
-    eval_expr(
+    eval(
       call(ident("","append") @ nopos, [tInt(1) @ nopos, tList([]) @ nopos]) @ [1,1],
+      _,
       tInt(0) @ [1,1]).
   % append(".", []) == 0
   test(call_append) :-
-    eval_expr(
+    eval(
       call(ident("","append") @ nopos, [tString(".") @ nopos, tList([]) @ nopos]) @ [1,1],
+      _,
       tInt(0) @ [1,1]).
   % has("eval") == 1
   test(call_has) :-
-    eval_expr(
+    eval(
       call(ident("","has") @ nopos, [tString("eval") @ nopos]) @ [1,1],
+      _,
       tInt(1) @ [1,1]).
 :- end_tests(expr).
 
 :- begin_tests(node).
   % file(Excmds)
   test(file1, all(R = [tSuccess])) :-
-    eval_expr(file([]) @ [1,1], R).
+    eval(file([]) @ [1,1], _, R).
   test(file2, all(R = [tSuccess])) :-
-    eval_expr(file([comment("comment") @ nopos]) @ [1,1], R).
+    eval(file([comment("comment") @ nopos]) @ [1,1], _, R).
 
   % comment(Text)
   test(comment, all(R = [tSuccess])) :-
-    eval_expr(comment("this is a comment") @ [1,1], R).
+    eval(comment("this is a comment") @ [1,1], _, R).
 :- end_tests(node).
 
 :- begin_tests(excmds).
@@ -171,9 +213,9 @@
 
   % echo function('has')('eval')
   test(funcref1) :-
-    eval_expr(file([
+    eval(file([
       echo([call(call(ident("","function") @ nopos,[tString("has") @ nopos]) @ nopos,[tString("eval") @ nopos]) @ nopos]) @ nopos
-    ]) @ [1,1], tSuccess).
+    ]) @ [1,1], _, tSuccess).
 
   % let F = function('has')
   % echo F('eval')
@@ -203,7 +245,7 @@
 
   % echo call(function('has'), ['eval'])
   test(call1) :-
-    eval_expr(file([
+    eval(file([
       echo([
         call(
           ident("","call") @ [1,6],
@@ -213,7 +255,7 @@
           ]
         ) @ [1,10]
       ]) @ [1,1]
-    ]) @ [1,1], tSuccess).
+    ]) @ [1,1], _, tSuccess).
 
   % let F = function('has')
   % echo call(F, ['eval'])
