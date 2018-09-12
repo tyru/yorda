@@ -10,6 +10,7 @@ import (
 
 	"github.com/haya14busa/go-vimlparser/ast"
 	"github.com/haya14busa/go-vimlparser/token"
+	"github.com/pkg/errors"
 )
 
 type errorReader struct {
@@ -18,6 +19,15 @@ type errorReader struct {
 
 func (r *errorReader) Read([]byte) (int, error) {
 	return 0, r.err
+}
+
+// errorf returns an error which include node position, and error message.
+func errorf(node ast.Node, format string, args ...interface{}) error {
+	format = "%s: " + format
+	newargs := make([]interface{}, 0, len(args)+1)
+	newargs = append(newargs, node.Pos().String())
+	newargs = append(newargs, args...)
+	return errors.Errorf(format, newargs...)
 }
 
 type converter struct {
@@ -439,18 +449,18 @@ main :- eval(file([`)
 			buf.WriteString(toDQString(n.Value))
 			buf.WriteString(")")
 		case token.OPTION:
-			// tOption(Value) @ Pos
-			buf.WriteString("tOption(")
+			// option(Name) @ Pos
+			buf.WriteString("option(")
 			buf.WriteString(quote(n.Value))
 			buf.WriteString(")")
 		case token.ENV:
-			// tEnv(Value) @ Pos
-			buf.WriteString("tEnv(")
+			// env(Name) @ Pos
+			buf.WriteString("env(")
 			buf.WriteString(quote(n.Value))
 			buf.WriteString(")")
 		case token.REG:
-			// tReg(Value) @ Pos
-			buf.WriteString("tReg(")
+			// reg(Name) @ Pos
+			buf.WriteString("reg(")
 			buf.WriteString(quote(n.Value))
 			buf.WriteString(")")
 		default:
