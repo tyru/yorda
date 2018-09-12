@@ -1099,14 +1099,12 @@ call_func(_, call(Args :: R @ _, Args), R).
 call_func(Env, call(ident("", Name) @ _, Args), R) :-
   vimfunc(Env, Name, Args :: R @ _), !;
   add_scope(Env, Name, Scope),
-  call_func(Env, call(ident(Scope, Name) @ _, Args), R),
-  !.
+  call_func(Env, call(ident(Scope, Name) @ _, Args), R), !.
 % A variable (with scope) is a funcref (e.g. l:F(42), g:F(42))
 call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
   \+ Scope = "",
   eval(Env, ident(Scope, Name) @ _, _, FunT @ _),
-  call_func(Env, call(FunT @ _, Args), R),
-  !.
+  call_func(Env, call(FunT @ _, Args), R), !.
 % Expression is a funcref
 %
 %		" function('has') = call(ident(Scope, Name) @ _, InnerArgs) @ _
