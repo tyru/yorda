@@ -1060,17 +1060,13 @@ eval(Node, RetEnv, Result) :-
 % ----------------- private -----------------
 
 eval(Env, Node, RetEnv, Result) :-
-  traverse(Env, Node, E1),
-  get_stack(E1, Stack),
-  (\+ empty(Stack) ->
-    pop(E1, Result, RetEnv);
-    (RetEnv, Result) = (E1, tSuccess)).
+  traverse(Env, Node, E1), pop(E1, Result, RetEnv).
 
 % new_eval_env(-Env)
 new_eval_env(Env) :-
   new_env(E1),
   add_hooks(E1, [on_enter:on_let_enter, on_enter:on_function_enter, on_leave:eval_node], E2),
-  append(E2, [stack:[], lv:0, vars:[], funcs:[]], Env).
+  append(E2, [stack:[tSuccess], lv:0, vars:[], funcs:[]], Env).
 
 get_stack(Env, Stack) :- member(stack:Stack, Env).
 
