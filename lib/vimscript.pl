@@ -1265,8 +1265,18 @@ traverse(Env, Node, RetEnv) :-
 traverse_list(Env, NodeList, RetEnv) :- foldl(traverse_rev, NodeList, Env, RetEnv).
 traverse_rev(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
 
-% Primitive types (with position)
-trav(Env, Node @ _, Env) :- prim(Node), !.
+:- discontiguous(trav/3).
+
+% Primitive types
+trav(Env, Node @ _, RetEnv) :-
+  prim(Node), !,
+  (Node = tList(L) -> traverse_list(Env, L, RetEnv);
+  Node = tTuple(L) -> traverse_list(Env, L, RetEnv);
+  Node = tDict(Entries) -> traverse_entries(Env, Entries, RetEnv);
+  RetEnv = Env, !).
+
+traverse_entries(Env, Entries, RetEnv) :- foldl(traverse_entry, Entries, Env, RetEnv).
+traverse_entry(Key:Value, Env, RetEnv) :- traverse(Env, Key, E1), traverse(E1, Value, RetEnv).
 
 % trav(+Env, file(+Excmds) @ +Pos, -RetEnv)
 trav(Env, file(Body) @ _, RetEnv) :- traverse_list(Env, Body, RetEnv), !.
