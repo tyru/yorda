@@ -1053,7 +1053,7 @@ eval(Env, Node, RetEnv, Result) :-
 new_eval_env(Env) :-
   new_env(E1),
   add_hooks(E1, [on_enter:on_let_enter, on_enter:on_function_enter, on_leave:eval_node], E2),
-  append(E2, [stack:[tSuccess], lv:0, vars:[], funcs:[]], Env).
+  append(E2, [stack:[tSuccess], lv:0, vars:[], funcs:[]], Env), !.
 
 get_stack(Env, Stack) :- member(stack:Stack, Env).
 
