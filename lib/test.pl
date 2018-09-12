@@ -29,67 +29,13 @@
     Value = tDict(_) @ [1, 1],
     eval(Value, _, Value).
   test(tTuple0) :-
-    Value = tTuple @ [1, 1],
+    Value = tTuple([]) @ [1, 1],
     eval(Value, _, Value).
   test(tTuple1) :-
-    Value = tTuple(_) @ [1, 1],
+    Value = tTuple([tInt(42) @ [1, 2]]) @ [1, 1],
     eval(Value, _, Value).
   test(tTuple2) :-
-    Value = tTuple(_, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple3) :-
-    Value = tTuple(_, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple4) :-
-    Value = tTuple(_, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple5) :-
-    Value = tTuple(_, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple6) :-
-    Value = tTuple(_, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple7) :-
-    Value = tTuple(_, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple8) :-
-    Value = tTuple(_, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple9) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple10) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple11) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple12) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple13) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple14) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple15) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple16) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple17) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple18) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple19) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
-    eval(Value, _, Value).
-  test(tTuple20) :-
-    Value = tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) @ [1, 1],
+    Value = tTuple([tInt(42) @ [1, 2], tFloat(12.34) @ [1, 3]]) @ [1, 1],
     eval(Value, _, Value).
 :- end_tests(primitive_types).
 

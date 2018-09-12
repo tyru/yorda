@@ -47,44 +47,25 @@ pos_string(Pos, '') :- \+ Pos = [_, _].
 
 prim(tAny).
 prim(tVoid).
-% v:true == tBool(true), v:false == tBool(false)
+% v:true = tBool(true), v:false = tBool(false)
 prim(tBool(_)).
-% v:null == tNone(null), v:none == tNone(none)
+% v:null = tNone(null), v:none = tNone(none)
 prim(tNone(_)).
-% 42 == tInt(42)
+% 42 = tInt(42)
 prim(tInt(_)).
-% 12.34 == tFloat(12.34)
+% 12.34 = tFloat(12.34)
 prim(tFloat(_)).
-% "hello" == tString("hello")
+% "hello" = tString("hello")
 prim(tString(_)).
-% [42] == tList([tInt(42) @ _])
+% [42] = tList([tInt(42) @ P])
 prim(tList(_)).
-% {'foo': 1, 'bar': 2} == tDict([
-%   [tString("foo") @ _, tInt(1) @ _],
-%   [tString("bar") @ _, tInt(2) @ _]
+% {'foo': 1, 'bar': 2} = tDict([
+%   [tString("foo") @ P1, tInt(1) @ P2],
+%   [tString("bar") @ P3, tInt(2) @ P4]
 % ])
 prim(tDict(_)).
-prim(tTuple).
+% [42, 12.34, "string"] = tTuple([tInt(42) @ P1, tFloat(12.34) @ P2, tString("string") @ P3])
 prim(tTuple(_)).
-prim(tTuple(_, _)).
-prim(tTuple(_, _, _)).
-prim(tTuple(_, _, _, _)).
-prim(tTuple(_, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
 prim(tError(_)).    % tError(Msg)
 
 to_bool(tBool(V), tBool(V)).
