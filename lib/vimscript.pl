@@ -37,6 +37,12 @@ split_list(0, Dropped, [], Dropped) :- !.
 split_list(N, [X | List], [X | Taken], Dropped) :-
   N > 0, M is N - 1, split_list(M, List, Taken, Dropped), !.
 
+error(Format, Args, tError(Msg)) :-
+  format(atom(Msg), Format, Args), !.
+
+pos_string([Line, Col], S) :- format(atom(S), '~d,~d: ', [Line, Col]).
+pos_string(Pos, '') :- \+ Pos = [_, _].
+
 % ===================== Primitive types =====================
 
 prim(tAny).
@@ -79,7 +85,7 @@ prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
 prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
 prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
 prim(tTuple(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)).
-prim(tError(_, _)).
+prim(tError(_)).    % tError(Msg)
 
 to_bool(tBool(V), tBool(V)).
 to_bool(tNone(_), tBool(false)).
@@ -1239,7 +1245,8 @@ reduce(Env, [call(_, ArgsOrig) @ Pos | Stack], RetStack) :-
 
 % reduce(+Env, option(+Name) @ +Pos, -RetEnv)
 reduce(_, [option(Name) @ Pos | Stack], [Value @ Pos | Stack]) :-
-  vimoption(Name, Value), !.
+  vimoption(Name, Value), !;
+  error('no such option: ~s', [Name], Value), !.
 
 % reduce(+Env, env(+Name) @ +Pos, -RetEnv)
 reduce(_, [env(_) @ Pos | Stack], [tString(_) @ Pos | Stack]) :- !.

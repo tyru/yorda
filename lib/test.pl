@@ -94,6 +94,34 @@
 :- end_tests(primitive_types).
 
 :- begin_tests(expr).
+  % $ENV is string
+  test(env_is_string) :-
+    eval(
+      env("ENV") @ [1,1],
+      _,
+      tString(_) @ [1,1]).
+  % @a is string
+  test(reg_is_string) :-
+    eval(
+      reg("a") @ [1,1],
+      _,
+      tString(_) @ [1,1]).
+  % &expandtab
+  test(option_expandtab) :-
+    eval(
+      option("expandtab") @ [1,1],
+      _,
+      tInt(_) @ [1,1]).
+  % &et
+  test(option_et) :-
+    eval(
+      option("et") @ [1,1],
+      _,
+      tInt(_) @ [1,1]).
+  % &unknown
+  test(option_unknown) :-
+    eval(option("unknown") @ [1,1], _, R),
+    R = tError('no such option: unknown') @ [1,1].
   % abs(42) == 42
   test(call_abs_int) :-
     eval(
