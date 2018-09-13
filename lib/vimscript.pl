@@ -1134,18 +1134,20 @@ add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv) :-
 %
 % See call_func/3 for the look-up of functions.
 %
-get_var(Env, ident(InScope, Name), Pos, Rhs) :-
-  ((nonvar(Name), nonvar(InScope), InScope = "") ->
-    add_scope(Env, Name, Scope);
-    Scope = InScope),
+get_var(Env, ident(Scope, Name), Pos, Rhs) :-
+  add_scope_nonvar(Env, Name, Scope, Scope1),
   get_vars(Env, Vars),
-  member(ident(Scope, Name) @ Pos => Rhs, Vars).
+  member(ident(Scope1, Name) @ Pos => Rhs, Vars).
+
+add_scope_nonvar(Env, Name, Scope, Scope_) :-
+  nonvar(Name), nonvar(Scope), Scope = "", !,
+  add_scope(Env, Name, Scope_), !.
+add_scope_nonvar(_, _, Scope, Scope) :- !.
 
 % add_scope(+Env, +Name, -Scope)
-add_scope(Env, Name, Scope) :-
-  compat(Name) -> Scope = "v";
-  get_level(Env, Lv),
-  Lv > 0 -> Scope = "l"; Scope = "g".
+add_scope(_, Name, "v") :- compat(Name), !.
+add_scope(Env, _, "l") :- get_level(Env, Lv), Lv > 0, !.
+add_scope(_, _, "g") :- !.
 
 % get_func(+Env, ident(?Scope, ?Name), ?Pos, ?Func)
 get_func(Env, ident(Scope, Name), Pos, Func) :-
@@ -1166,9 +1168,9 @@ on_function_enter(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
 
 eval_node(Env, Node, on_leave, RetEnv) :-
   get_stack(Env, Stack),
-  reduce(Env, Node, Stack, RetStack) ->
-    update_assoc_list(stack:Stack, Env, stack:RetStack, RetEnv);
-    RetEnv = Env.
+  reduce(Env, Node, Stack, RetStack), !,
+  update_assoc_list(stack:Stack, Env, stack:RetStack, RetEnv), !.
+eval_node(Env, _, on_leave, Env) :- !.
 
 % ------- reduce(+Env, +Node, +Stack, -RetStack) -------
 
@@ -1277,7 +1279,8 @@ run_hook(Env, Node, Event, RetEnv) :-
   findall(Func, member(Event:Func, Hooks), FuncList),
   foldl(do_run_hook(Node, Event), FuncList, Env, RetEnv).
 do_run_hook(Node, Event, Func, Env, RetEnv) :-
-  call(Func, Env, Node, Event, RetEnv) -> !; RetEnv = Env.
+  call(Func, Env, Node, Event, RetEnv), !.
+do_run_hook(_, _, _, Env, Env) :- !.
 
 % traverse(+Env, +Node, -RetEnv)
 traverse(Env, Node, RetEnv) :-
@@ -1294,10 +1297,12 @@ traverse_rev(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
 % Primitive types
 trav(Env, Node @ _, RetEnv) :-
   prim(Node), !,
-  (Node = tList(L) -> traverse_list(Env, L, RetEnv);
-  Node = tTuple(L) -> traverse_list(Env, L, RetEnv);
-  Node = tDict(Entries) -> traverse_entries(Env, Entries, RetEnv);
-  RetEnv = Env, !).
+  trav_prim(Env, Node, RetEnv), !.
+
+trav_prim(Env, tList(L), RetEnv) :- !, traverse_list(Env, L, RetEnv), !.
+trav_prim(Env, tTuple(L), RetEnv) :- !, traverse_list(Env, L, RetEnv), !.
+trav_prim(Env, tDict(Entries), RetEnv) :- !, traverse_entries(Env, Entries, RetEnv), !.
+trav_prim(Env, _, Env) :- !.
 
 traverse_entries(Env, Entries, RetEnv) :- foldl(traverse_entry, Entries, Env, RetEnv).
 traverse_entry(Key:Value, Env, RetEnv) :- traverse(Env, Key, E1), traverse(E1, Value, RetEnv).
