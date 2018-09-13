@@ -4,6 +4,9 @@
 :- begin_tests(error).
   test(no_such_term) :- \+ eval(foobar, _, _).
   test(not_equal) :- eval(tInt(42) @ nopos, _, R), \+ R = tInt(999) @ nopos.
+  test(non_string_dict_key) :-
+    eval(tDict([tInt(42) @ [1,2] : tInt(42) @ [1,3]]) @ [1,1], _, R),
+    R = tError('key is not string')@[1, 2].
 :- end_tests(error).
 
 :- begin_tests(primitive_types).
