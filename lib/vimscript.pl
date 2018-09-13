@@ -21,6 +21,12 @@
 
 empty([]).
 
+succ(N, M) :- nonvar(N), !, M is N + 1.
+succ(N, M) :- nonvar(M), !, N is M - 1.
+
+pred(N, M) :- nonvar(N), !, M is N - 1.
+pred(N, M) :- nonvar(M), !, N is M + 1.
+
 % update_assoc_list(+Elem, ?List, +Updated, ?UpdatedList)
 %
 % NOTE: Elem must be matched to one or zero elements in List.
@@ -1034,7 +1040,7 @@ vimvar("v", "warningmsg", [], tString(_)).
 vimvar("v", "windowid", [vvRO], tInt(_)).
 vimvar("w", "", [vvRO], tDict(_)).
 
-% Some bare words become v: variables for compatibility (e.g. "count" -> "v:count")
+% Some bare words become v: variables for compatibility (e.g. "count" => "v:count")
 compat(Name) :- vimvar("v", Name, Flags, _), member(vvCompat, Flags).
 
 % ===================== Env =====================
@@ -1052,7 +1058,7 @@ eval(Env, Node, RetEnv, Result) :-
 % new_eval_env(-Env)
 new_eval_env(Env) :-
   new_env(E1),
-  add_hooks(E1, [on_enter:on_let_enter, on_enter:on_function_enter, on_leave:eval_node], E2),
+  add_hooks(E1, [on_enter:on_function, on_leave:on_function, on_enter:on_let_enter, on_leave:eval_node], E2),
   append(E2, [stack:[tSuccess], lv:0, vars:[], funcs:[]], Env), !.
 
 get_stack(Env, Stack) :- member(stack:Stack, Env).
@@ -1067,6 +1073,13 @@ pop(Env, Value, RetEnv) :-
 
 % get_level(+Env, -Lv)
 get_level(Env, Lv) :- member(lv:Lv, Env).
+
+% succ_level(+Env, -RetEnv)
+succ_level(Env, RetEnv) :-
+  update_assoc_list(lv:Lv, Env, Lv:Lv_, RetEnv), succ(Lv, Lv_), !.
+% pred_level(+Env, -RetEnv)
+pred_level(Env, RetEnv) :-
+  update_assoc_list(lv:Lv, Env, Lv:Lv_, RetEnv), pred(Lv, Lv_), !.
 
 % get_vars(+Env, -Vars)
 get_vars(Env, Vars) :- member(vars:Vars, Env).
@@ -1163,8 +1176,11 @@ on_let_enter(Env, let(Lhs, =, Rhs) @ _, on_enter, RetEnv) :-
   add_var(Env, Lhs, Rhs, RetEnv), !.
 
 % Add function to Env
-on_function_enter(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
-  add_func(Env, function(Name, Params, Body) @ Pos, RetEnv), !.
+on_function(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
+  !, add_func(Env, function(Name, Params, Body) @ Pos, E1),
+ succ_level(E1, RetEnv), !.
+on_function(Env, function(_, _, _) @ _, on_leave, RetEnv) :-
+  !, pred_level(Env, RetEnv), !.
 
 eval_node(Env, Node, on_leave, RetEnv) :-
   get_stack(Env, Stack),
