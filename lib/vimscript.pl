@@ -1165,73 +1165,99 @@ on_function_enter(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
   add_func(Env, function(Name, Params, Body) @ Pos, RetEnv), !.
 
 eval_node(Env, Node, on_leave, RetEnv) :-
-  push(Env, Node, E1), reduce(E1, RetEnv).
-
-reduce(Env, RetEnv) :-
   get_stack(Env, Stack),
-  reduce(Env, Stack, RetStack) ->
+  reduce(Env, Node, Stack, RetStack) ->
     update_assoc_list(stack:Stack, Env, stack:RetStack, RetEnv);
     RetEnv = Env.
 
 % ------- reduce(+Env, +Node, +Stack, -RetStack) -------
 
-% Push primitive values as-is.
-% reduce(_, [T @ _ | Stack], [T @ _ | Stack]) :- prim(T), !.
+:- discontiguous(reduce/4).
 
-reduce(_, [file(_) @ _ | Stack], Stack) :- !.
+% Primitive values.
+reduce(_, Node @ Pos, Stack, RetStack) :-
+  prim(Node), !,
+  reduce_prim(Node @ Pos, Stack, RetStack), !.
 
-reduce(_, [comment(_) @ _ | Stack], Stack) :- !.
+reduce_prim(tList(L) @ Pos, Stack, RetStack) :-
+  !, reduce_list(L, Stack, L1, Stack1),
+  RetStack = [tList(L1) @ Pos | Stack1], !.
 
-reduce(_, [excmd(_) @ _ | Stack], Stack) :- !.
+reduce_prim(tTuple(L) @ Pos, Stack, RetStack) :-
+  !, reduce_list(L, Stack, L1, Stack1),
+  RetStack = [tTuple(L1) @ Pos | Stack1], !.
 
-reduce(_, [return(_) @ _, _ | Stack], Stack) :- !.
+reduce_prim(tDict(Entries) @ Pos, Stack, RetStack) :-
+  !, reduce_dict(tDict(Entries) @ Pos, Stack, RetStack), !.
 
-reduce(_, [function(_, ParamsOrig, _) @ _, Stack], RetStack) :-
+reduce_prim(Node @ Pos, Stack, [Node @ Pos | Stack]) :- !.
+
+reduce_list(L, Stack, Taken, RetStack) :-
+  length(L, N), split_list(N, Stack, Taken, RetStack), !.
+
+reduce_dict(tDict(Entries) @ Pos, Stack, RetStack) :-
+  length(Entries, EntriesN), N is EntriesN * 2,
+  split_list(N, Stack, KeyValues, Stack1),
+  reduce_key_values(KeyValues, Entries1),
+  RetStack = [tDict(Entries1) @ Pos | Stack1].
+
+reduce_key_values([], []).
+reduce_key_values([K, V | Xs], [K:V | Entries]) :- reduce_key_values(Xs, Entries).
+
+reduce(_, file(_) @ _, Stack, Stack) :- !.
+
+reduce(_, comment(_) @ _, Stack, Stack) :- !.
+
+reduce(_, excmd(_) @ _, Stack, Stack) :- !.
+
+reduce(_, return(_) @ _, [_ | Stack], Stack) :- !.
+
+reduce(_, function(_, ParamsOrig, _) @ _, Stack, RetStack) :-
   length(ParamsOrig, ParamsN),
   N is 1 + ParamsN,    % Name + Params
   split_list(N, Stack, _, RetStack), !.
 
-reduce(_, [excall(_) @ _, _ | Stack], Stack) :- !.
+reduce(_, excall(_) @ _, [_ | Stack], Stack) :- !.
 
 % TODO destructuring, subscript, dot, ...
-reduce(_, [let(_, _, _) @ _, _, _ | Stack], Stack) :- !.
+reduce(_, let(_, _, _) @ _, [_, _ | Stack], Stack) :- !.
 
-reduce(_, [if(_, _) @ _, _ | Stack], Stack) :- !.
+reduce(_, if(_, _) @ _, [_ | Stack], Stack) :- !.
 
-reduce(_, [echo(ExprList) @ _ | Stack], RetStack) :-
+reduce(_, echo(ExprList) @ _, Stack, RetStack) :-
   length(ExprList, N),
   split_list(N, Stack, _, RetStack), !.
 
-reduce(_, [subscript(_, _) @ Pos, Right @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
+reduce(_, subscript(_, _) @ Pos, [Right @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
   get_prop(Left, Right, Value), !.
 
-reduce(_, [dot(_, _) @ Pos, ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
+reduce(_, dot(_, _) @ Pos, [ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack]) :-
   get_prop(Left, tString(Name), Value), !.
 
 % TODO check lhs, rhs types
 % TODO other ops
-reduce(_, [op(_, ==, _) @ Pos, _, _ | Stack], [tInt(_) @ Pos | Stack]) :- !.
+reduce(_, op(_, ==, _) @ Pos, [_, _ | Stack], [tInt(_) @ Pos | Stack]) :- !.
 
-reduce(Env, [call(_, ArgsOrig) @ Pos | Stack], RetStack) :-
+reduce(Env, call(_, ArgsOrig) @ Pos, Stack, RetStack) :-
   length(ArgsOrig, Arity),
   N is 1 + Arity,    % Fun + Args
   split_list(N, Stack, [Fun | Args], S1),
   call_func(Env, call(Fun, Args), Value),
   RetStack = [Value @ Pos | S1], !.
 
-% Push ident as-is.
-% reduce(_, [ident(Scope, Name) @ Pos, Stack], [ident(Scope, Name) @ Pos, Stack]) :- !.
+% reduce(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
+reduce(_, ident(Scope, Name) @ Pos, Stack, [ident(Scope, Name) @ Pos, Stack]) :- !.
 
 % reduce(+Env, option(+Name) @ +Pos, -RetEnv)
-reduce(_, [option(Name) @ Pos | Stack], [Value @ Pos | Stack]) :-
+reduce(_, option(Name) @ Pos, Stack, [Value @ Pos | Stack]) :-
   vimoption(Name, Value), !;
   error('no such option: ~s', [Name], Value), !.
 
 % reduce(+Env, env(+Name) @ +Pos, -RetEnv)
-reduce(_, [env(_) @ Pos | Stack], [tString(_) @ Pos | Stack]) :- !.
+reduce(_, env(_) @ Pos, Stack, [tString(_) @ Pos | Stack]) :- !.
 
 % reduce(+Env, reg(+Name) @ +Pos, -RetEnv)
-reduce(_, [reg(_) @ Pos | Stack], [tString(_) @ Pos | Stack]) :- !.
+reduce(_, reg(_) @ Pos, Stack, [tString(_) @ Pos | Stack]) :- !.
 
 % ===================== Traversal functions =====================
 
