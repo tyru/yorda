@@ -1127,16 +1127,16 @@ add_param1(ident("", Name) @ Pos, Env, RetEnv) :-
   add_var(Env, ident("a", Name) @ Pos, _, RetEnv).
 
 % call_func(+Env, call(+Fun, +Args), -R)
-call_func(_, call(Args :: R @ _, Args), R).
+call_func(_, call(Args :: R @ _, Args), R) :- !.
 % No scope, must be a Vim built-in function or a variable (e.g. has("eval"), F(42))
 call_func(Env, call(ident("", Name) @ _, Args), R) :-
-  vimfunc(Env, Name, Args :: R @ _), !;
-  add_scope(Env, Name, Scope),
+  vimfunc(Env, Name, Args :: R @ _), !.
+call_func(Env, call(ident("", Name) @ _, Args), R) :-
+  !, add_scope(Env, Name, Scope),
   call_func(Env, call(ident(Scope, Name) @ _, Args), R), !.
-% A variable (with scope) is a funcref (e.g. l:F(42), g:F(42))
+% A variable with scope is a funcref (e.g. l:F(42), g:F(42))
 call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
-  \+ Scope = "",
-  eval(Env, ident(Scope, Name) @ _, _, FunT @ _),
+  !, eval(Env, ident(Scope, Name) @ _, _, FunT @ _),
   call_func(Env, call(FunT @ _, Args), R), !.
 % Expression is a funcref
 %
@@ -1144,7 +1144,7 @@ call_func(Env, call(ident(Scope, Name) @ _, Args), R) :-
 %		call function('has')('eval')
 %
 call_func(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args), R) :-
-  call_func(Env, call(ident(Scope, Name) @ _, InnerArgs), FunT),
+  !, call_func(Env, call(ident(Scope, Name) @ _, InnerArgs), FunT),
   call_func(Env, call(FunT @ _, Args), R).
 
 % add_var(+Env, ident(+Scope, +Name) @ +Pos, +Rhs, -RetEnv)
@@ -1255,7 +1255,7 @@ reduce(_, excmd(_) @ _, Stack, Stack, []) :- !.
 reduce(_, return(_) @ _, [_ | Stack], Stack, []) :- !.
 
 reduce(_, function(_, ParamsOrig, _) @ _, Stack, RetStack, []) :-
-  length(ParamsOrig, ParamsN),
+  !, length(ParamsOrig, ParamsN),
   N is 1 + ParamsN,    % Name + Params
   split_list(N, Stack, _, RetStack), !.
 
@@ -1267,21 +1267,21 @@ reduce(_, let(_, _, _) @ _, [_, _ | Stack], Stack, []) :- !.
 reduce(_, if(_, _) @ _, [_ | Stack], Stack, []) :- !.
 
 reduce(_, echo(ExprList) @ _, Stack, RetStack, []) :-
-  length(ExprList, N),
+  !, length(ExprList, N),
   split_list(N, Stack, _, RetStack), !.
 
 reduce(_, subscript(_, _) @ Pos, [Right @ _, Left @ _ | Stack], [Value @ Pos | Stack], []) :-
-  get_prop(Left, Right, Value), !.
+  !, get_prop(Left, Right, Value), !.
 
 reduce(_, dot(_, _) @ Pos, [ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack], []) :-
-  get_prop(Left, tString(Name), Value), !.
+  !, get_prop(Left, tString(Name), Value), !.
 
 % TODO check lhs, rhs types
 % TODO other ops
 reduce(_, op(_, ==, _) @ Pos, [_, _ | Stack], [tInt(_) @ Pos | Stack], []) :- !.
 
 reduce(Env, call(_, ArgsOrig) @ Pos, Stack, RetStack, []) :-
-  length(ArgsOrig, Arity),
+  !, length(ArgsOrig, Arity),
   N is 1 + Arity,    % Fun + Args
   split_list(N, Stack, [Fun | Args], S1),
   call_func(Env, call(Fun, Args), Value),
@@ -1292,7 +1292,8 @@ reduce(_, ident(Scope, Name) @ Pos, Stack, [ident(Scope, Name) @ Pos, Stack], []
 
 % reduce(+Env, option(+Name) @ +Pos, -RetEnv)
 reduce(_, option(Name) @ Pos, Stack, [Value @ Pos | Stack], []) :-
-  vimoption(Name, Value), !;
+  vimoption(Name, Value), !.
+reduce(_, option(Name) @ Pos, Stack, [Value @ Pos | Stack], []) :-
   error('no such option: ~s', [Name], Value), !.
 
 % reduce(+Env, env(+Name) @ +Pos, -RetEnv)
