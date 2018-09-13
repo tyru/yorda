@@ -131,11 +131,7 @@ vimfunc(Env, "appendbufline", [tString(A) @ _, tInt(B) @ _, tString(C) @ SPos] :
 vimfunc(_, "appendbufline", [tString(_) @ _, tString(_) @ _, tList(_) @ _] :: tInt(0) @ _).
 vimfunc(Env, "appendbufline", [tString(A) @ _, tString(B) @ _, tString(C) @ SPos] :: R @ _) :-
   vimfunc(Env, "appendbufline", [tString(A) @ _, tString(B) @ _, tList([tString(C) @ SPos]) @ _] :: R @ _).
-% call(X, Args, Self)
-% add Self to Env, and call call(X, Args) recursively.
-vimfunc(Env, "call", [X, tList(Args) @ _, Self] :: R @ _) :-
-  NextEnv = [ident("l", "self") @ _ => Self | Env],
-  vimfunc(NextEnv, "call", [X, tList(Args) @ _] :: R @ _), !.
+% NOTE: See call_func() for call(X, Args, Self)
 % call(Fun, Args)
 vimfunc(_, "call", [Fun, tList(Args) @ _] :: R @ _) :- R = call(Fun, Args), !.
 % Name must not be a variable, and must be a vimfunc.
@@ -1128,9 +1124,15 @@ add_param1(ident("", Name) @ Pos, Env, RetEnv) :-
 
 % call_func(+Env, call(+Fun, +Args), -R)
 call_func(_, call(Args :: R @ _, Args), R) :- !.
-% No scope, must be a Vim built-in function or a variable (e.g. has("eval"), F(42))
+% No scope, must be a Vim built-in function or a variable without scope (e.g. has("eval"), F(42))
+% Only handle has("eval") case here.
 call_func(Env, call(ident("", Name) @ _, Args), R) :-
   vimfunc(Env, Name, Args :: R @ _), !.
+% Special treatment of call({func}, {arglist}, {dict})
+call_func(Env, call(ident("", "call") @ _, [Fun, tList(Args) @ _, Self]) @ Pos, R) :-
+  !, NextEnv = [ident("l", "self") @ _ => Self | Env],
+  call_func(NextEnv, call(ident("", "call") @ _, [Fun, tList(Args) @ _]) @ Pos, R), !.
+% A variable without scope (e.g. F(42))
 call_func(Env, call(ident("", Name) @ _, Args), R) :-
   !, add_scope(Env, Name, Scope),
   call_func(Env, call(ident(Scope, Name) @ _, Args), R), !.

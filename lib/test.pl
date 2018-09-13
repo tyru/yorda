@@ -260,6 +260,22 @@
     ]) @ [1,1], RetEnv, tSuccess),
     findall((X, Y, Z), vimscript:get_var(RetEnv, X, Y, Z), Results).
 
+  % echo call(function('has'), ['eval'], {})
+  test(call1) :-
+    eval(file([
+      echo([
+        call(
+          ident("","call") @ [1,6],
+          [
+            call(ident("","function") @ [1,11],[tString("has") @ [1,20]]) @ [1,19],
+            tList([tString("eval") @ [1,29]]) @ [1,28],
+            tDict([]) @ [1,40]
+          ]
+        ) @ [1,10]
+      ]) @ [1,1]
+    ]) @ [1,1], _, tSuccess).
+
+
   test(define_func) :-
     FuncName = ident("s","id"),
     Func = function(FuncName @ nopos,[ident("","x") @ [1,16]],[
