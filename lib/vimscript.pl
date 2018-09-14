@@ -1246,12 +1246,12 @@ reduce(_, comment(_) @ _, Stack, Stack, []) :- !.
 
 reduce(_, excmd(_) @ _, Stack, Stack, []) :- !.
 
-reduce(_, return(_) @ _, [_ | Stack], Stack, []) :- !.
-
 reduce(_, function(_, ParamsOrig, _) @ _, Stack, RetStack, []) :-
   !, length(ParamsOrig, ParamsN),
   N is 1 + ParamsN,    % Name + Params
   split_list(N, Stack, _, RetStack), !.
+
+reduce(_, return(_) @ _, [_ | Stack], Stack, []) :- !.
 
 reduce(_, excall(_) @ _, [_ | Stack], Stack, []) :- !.
 
@@ -1324,8 +1324,10 @@ traverse(Env, Node, RetEnv) :-
   run_hook(E2, Node, on_leave, RetEnv).
 
 % traverse_list(+Env, +NodeList, -RetEnv)
-traverse_list(Env, NodeList, RetEnv) :- foldl(traverse_rev, NodeList, Env, RetEnv).
-traverse_rev(Node, Env, RetEnv) :- traverse(Env, Node, RetEnv).
+traverse_list(Env, NodeList, RetEnv) :-
+  foldl(traverse_rev, NodeList, Env, RetEnv).
+traverse_rev(Node, Env, RetEnv) :-
+  traverse(Env, Node, RetEnv).
 
 :- discontiguous(trav/3).
 
@@ -1334,16 +1336,21 @@ trav(Env, Node @ _, RetEnv) :-
   prim(Node), !,
   trav_prim(Env, Node, RetEnv), !.
 
-trav_prim(Env, tList(L), RetEnv) :- !, traverse_list(Env, L, RetEnv), !.
-trav_prim(Env, tTuple(L), RetEnv) :- !, traverse_list(Env, L, RetEnv), !.
-trav_prim(Env, tDict(Entries), RetEnv) :- !, traverse_entries(Env, Entries, RetEnv), !.
+trav_prim(Env, tList(L), RetEnv) :-
+  !, traverse_list(Env, L, RetEnv), !.
+trav_prim(Env, tTuple(L), RetEnv) :-
+  !, traverse_list(Env, L, RetEnv), !.
+trav_prim(Env, tDict(Entries), RetEnv) :-
+  !, traverse_entries(Env, Entries, RetEnv), !.
 trav_prim(Env, _, Env) :- !.
 
-traverse_entries(Env, Entries, RetEnv) :- foldl(traverse_entry, Entries, Env, RetEnv).
-traverse_entry(Key:Value, Env, RetEnv) :- traverse(Env, Key, E1), traverse(E1, Value, RetEnv).
+traverse_entries(Env, Entries, RetEnv) :-
+  foldl(traverse_entry, Entries, Env, RetEnv).
+traverse_entry(Key:Value, Env, RetEnv) :-
+  traverse(Env, Key, E1), traverse(E1, Value, RetEnv).
 
 % trav(+Env, file(+Excmds) @ +Pos, -RetEnv)
-trav(Env, file(Body) @ _, RetEnv) :- traverse_list(Env, Body, RetEnv), !.
+trav(Env, file(Body) @ _, RetEnv) :- !, traverse_list(Env, Body, RetEnv), !.
 
 % TODO type comment
 % trav(+Env, comment(+Text) @ +Pos, -RetEnv)
@@ -1353,46 +1360,169 @@ trav(Env, comment(_) @ _, Env) :- !.
 % trav(+Env, excmd(+Command) @ +Pos, -RetEnv)
 trav(Env, excmd(_) @ _, Env) :- !.
 
-% trav(+Env, return(+Expr) @ +Pos, -RetEnv)
-trav(Env, return(Expr) @ _, RetEnv) :- traverse(Env, Expr, RetEnv), !.
-
 % trav(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 trav(Env, function(Name, Params, Body) @ _, RetEnv) :-
-  append([Name | Params], Body, L),
+  !, append([Name | Params], Body, L),
   traverse_list(Env, L, RetEnv), !.
 
+% trav(+Env, return(+Expr) @ +Pos, -RetEnv)
+trav(Env, return(Expr) @ _, RetEnv) :-
+  !, traverse(Env, Expr, RetEnv), !.
+
 % trav(+Env, excall(+FuncCall) @ +Pos, -RetEnv)
-trav(Env, excall(FuncCall) @ _, RetEnv) :- traverse(Env, FuncCall, RetEnv), !.
+trav(Env, excall(FuncCall) @ _, RetEnv) :-
+  !, traverse(Env, FuncCall, RetEnv), !.
 
 % trav(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, -RetEnv)
-trav(Env, let(Lhs, _, Rhs) @ _, RetEnv) :- traverse_list(Env, [Lhs, Rhs], RetEnv), !.
+trav(Env, let(Lhs, _, Rhs) @ _, RetEnv) :-
+  !, traverse_list(Env, [Lhs, Rhs], RetEnv), !.
+
+% trav(+Env, unlet(ExprList) @ +Pos, -RetEnv)
+trav(Env, unlet(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
+
+% trav(+Env, lockvar(Depth, ExprList) @ +Pos, -RetEnv)
+trav(Env, lockvar(_, ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
+
+% trav(+Env, unlockvar(Depth, ExprList) @ +Pos, -RetEnv)
+trav(Env, unlockvar(_, ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
 
 % trav(+Env, if(+Cond, +Body) @ +Pos, -RetEnv)
-trav(Env, if(Cond, Body) @ _, RetEnv) :- traverse_list(Env, [Cond | Body], RetEnv), !.
-
-% TODO
 % trav(+Env, if(+Cond, +Body, else(+ElseBody)) @ +Pos, -RetEnv)
 % trav(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...])) @ +Pos, -RetEnv)
 % trav(+Env, if(+Cond, +Body, elseif([+ElseCond, +ElseIfBody, ...]), else(+ElseBody)) @ +Pos, -RetEnv)
+trav(Env, if(Cond, Body) @ _, RetEnv) :-
+  !, traverse_list(Env, [Cond | Body], RetEnv), !.
+trav(Env, if(Cond, Body, Clause) @ _, RetEnv) :-
+  !, traverse_list(Env, [Cond | Body], E1),
+  traverse_if_clause(E1, Clause, RetEnv), !.
+trav(Env, if(Cond, Body, Clause1, Clause2) @ _, RetEnv) :-
+  !, traverse_list(Env, [Cond | Body], E1),
+  traverse_if_clause(E1, Clause1, E2),
+  traverse_if_clause(E2, Clause2, RetEnv), !.
+
+traverse_if_clause(Env, [], Env) :- !.
+traverse_if_clause(Env, else(Body), RetEnv) :-
+  !, traverse_list(Env, Body, RetEnv), !.
+traverse_if_clause(Env, elseif([Cond, Body | Xs]), RetEnv) :-
+  !, traverse_list(Env, [Cond | Body], E1),
+  traverse_if_clause(E1, elseif(Xs), RetEnv), !.
+
+% trav(+Env, while(+Cond, +Body) @ +Pos, -RetEnv)
+trav(Env, while(Cond, Body) @ _, RetEnv) :-
+  !, traverse_list(Env, [Cond | Body], RetEnv), !.
+
+% trav(+Env, for(+Lhs, in, +Rhs, +Body) @ +Pos, -RetEnv)
+trav(Env, for(Lhs, in, Rhs, Body) @ _, RetEnv) :-
+  !, traverse_list(Env, [Lhs, Rhs | Body], RetEnv), !.
+
+% trav(+Env, continue() @ +Pos, -RetEnv)
+trav(Env, continue() @ _, Env) :- !.
+
+% trav(+Env, break() @ +Pos, -RetEnv)
+trav(Env, break() @ _, Env) :- !.
+
+% trav(+Env, try(+Body) @ +Pos, -RetEnv)
+trav(Env, try(Body) @ _, RetEnv) :-
+  !, traverse_list(Env, Body, RetEnv), !.
+
+% trav(+Env, try(+Body) @ +Pos, -RetEnv)
+% trav(+Env, try(+Body, catch([+Pattern, +Body, ...])) @ +Pos, -RetEnv)
+% trav(+Env, try(+Body, finally(+Body)) @ +Pos, -RetEnv)
+% trav(+Env, try(+Body, catch([+Pattern, +Body, ...]), finally(+Body)) @ +Pos, -RetEnv)
+trav(Env, try(Body) @ _, RetEnv) :-
+  !, traverse_list(Env, Body, RetEnv), !.
+trav(Env, try(Body, Clause) @ _, RetEnv) :-
+  !, traverse_list(Env, Body, E1),
+  traverse_catch_clause(E1, Clause, RetEnv), !.
+trav(Env, try(Body, Clause1, Clause2) @ _, RetEnv) :-
+  !, traverse_list(Env, Body, E1),
+  traverse_catch_clause(E1, Clause1, E2),
+  traverse_catch_clause(E2, Clause2, RetEnv), !.
+
+traverse_catch_clause(Env, catch([]), Env) :- !.
+traverse_catch_clause(Env, catch([_, Body | Xs]), RetEnv) :-
+  !, traverse_list(Env, Body, E1),
+  traverse_catch_clause(E1, catch(Xs), RetEnv), !.
+traverse_catch_clause(Env, finally(Body), RetEnv) :-
+  !, traverse_list(Env, Body, RetEnv), !.
+
+% trav(+Env, throw(+Expr) @ +Pos, -RetEnv)
+trav(Env, throw(Expr) @ _, RetEnv) :-
+  !, traverse(Env, Expr, RetEnv), !.
 
 % trav(+Env, echo(+ExprList) @ +Pos, -RetEnv)
-trav(Env, echo(ExprList) @ _, RetEnv) :- traverse_list(Env, ExprList, RetEnv), !.
+trav(Env, echo(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
 
-% TODO
-% trav(+Env, subscript(+Left, +Right) @ +Pos, -RetEnv)
-trav(Env, subscript(Left, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
+% trav(+Env, echon(+ExprList) @ +Pos, -RetEnv)
+trav(Env, echon(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
 
-% trav(+Env, dot(+Left, +Right) @ +Pos, -RetEnv)
-trav(Env, dot(Left, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
+% trav(+Env, echomsg(+ExprList) @ +Pos, -RetEnv)
+trav(Env, echomsg(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
+
+% trav(+Env, echoerr(+ExprList) @ +Pos, -RetEnv)
+trav(Env, echoerr(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
+
+% trav(+Env, echohl(+Name) @ +Pos, -RetEnv)
+trav(Env, echohl(_) @ _, Env) :- !.
+
+% trav(+Env, execute(+ExprList) @ +Pos, -RetEnv)
+trav(Env, execute(ExprList) @ _, RetEnv) :-
+  !, traverse_list(Env, ExprList, RetEnv), !.
+
+% trav(+Env, ternary(+Cond, +Left, +Right) @ +Pos, -RetEnv)
+trav(Env, ternary(Cond, Left, Right) @ _, RetEnv) :-
+  !, traverse_list(Env, [Cond, Left, Right], RetEnv), !.
 
 % trav(+Env, op(+Left, +Op, +Right) @ +Pos, -RetEnv)
-trav(Env, op(Left, _, Right) @ _, RetEnv) :- traverse_list(Env, [Left, Right], RetEnv), !.
+trav(Env, op(Left, _, Right) @ _, RetEnv) :-
+  !, traverse_list(Env, [Left, Right], RetEnv), !.
+
+% trav(+Env, op(+Op, +Expr) @ +Pos, -RetEnv)
+trav(Env, op(_, Expr) @ _, RetEnv) :-
+  !, traverse(Env, Expr, RetEnv), !.
+
+% trav(+Env, subscript(+Left, +Right) @ +Pos, -RetEnv)
+trav(Env, subscript(Left, Right) @ _, RetEnv) :-
+  !, traverse_list(Env, [Left, Right], RetEnv), !.
+
+% trav(+Env, slice(+Lhs, +Low, :, +High) @ +Pos, -RetEnv)
+% trav(+Env, slice(+Lhs, :, +High) @ +Pos, -RetEnv)
+% trav(+Env, slice(+Lhs, +Low, :) @ +Pos, -RetEnv)
+% trav(+Env, slice(+Lhs, :) @ +Pos, -RetEnv)
+trav(Env, slice(Lhs, Clause) @ _, RetEnv) :-
+  !, traverse(Env, Lhs, E1),
+  traverse_slice_clause(E1, Clause, RetEnv), !.
+trav(Env, slice(Lhs, Clause1, Clause2) @ _, RetEnv) :-
+  !, traverse(Env, Lhs, E1),
+  traverse_slice_clause(E1, Clause1, E2),
+  traverse_slice_clause(E2, Clause2, RetEnv), !.
+trav(Env, slice(Lhs, Clause1, Clause2, Clause3) @ _, RetEnv) :-
+  !, traverse(Env, Lhs, E1),
+  traverse_slice_clause(E1, Clause1, E2),
+  traverse_slice_clause(E2, Clause2, E3),
+  traverse_slice_clause(E3, Clause3, RetEnv), !.
+
+traverse_slice_clause(Env, :, Env) :- !.
+traverse_slice_clause(Env, Expr, RetEnv) :-
+  traverse(Env, Expr, RetEnv), !.
 
 % trav(+Env, call(+Fun, +Args) @ +Pos, -RetEnv)
-trav(Env, call(Fun, Args) @ _, RetEnv) :- traverse_list(Env, [Fun | Args], RetEnv), !.
+trav(Env, call(Fun, Args) @ _, RetEnv) :-
+  !, traverse_list(Env, [Fun | Args], RetEnv), !.
 
-% trav(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
-trav(Env, ident(_, _) @ _, Env) :- !.
+% trav(+Env, dot(+Left, +Right) @ +Pos, -RetEnv)
+trav(Env, dot(Left, Right) @ _, RetEnv) :-
+  !, traverse_list(Env, [Left, Right], RetEnv), !.
+
+% trav(+Env, number(+String) @ +Pos, -RetEnv)
+trav(Env, number(_) @ _, Env) :- !.
 
 % trav(+Env, option(+Name) @ +Pos, -RetEnv)
 trav(Env, option(_) @ _, Env) :- !.
@@ -1402,3 +1532,25 @@ trav(Env, env(_) @ _, Env) :- !.
 
 % trav(+Env, reg(+Name) @ +Pos, -RetEnv)
 trav(Env, reg(_) @ _, Env) :- !.
+
+% trav(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
+trav(Env, ident(_, _) @ _, Env) :- !.
+
+% trav(+Env, curly_name([+CurlyNameExpr or +CurlyNameLit, ...]) @ +Pos, -RetEnv)
+trav(Env, curly_name(List) @ _, RetEnv) :-
+  !, traverse_list(Env, List, RetEnv), !.
+
+% trav(+Env, curly_name_lit(+Value) @ +Pos, -RetEnv)
+trav(Env, curly_name_lit(_) @ _, Env) :- !.
+
+% trav(+Env, curly_name_expr(+Value) @ +Pos, -RetEnv)
+trav(Env, curly_name_expr(_) @ _, Env) :- !.
+
+% trav(+Env, lambda(+Params, +Expr) @ +Pos, -RetEnv)
+trav(Env, lambda(Params, Expr) @ _, RetEnv) :-
+  !, traverse_list(Env, Params, E1),
+  traverse(E1, Expr, RetEnv), !.
+
+% trav(+Env, par(+Expr) @ +Pos, -RetEnv)
+trav(Env, par(Expr) @ _, RetEnv) :-
+  !, traverse(Env, Expr, RetEnv), !.

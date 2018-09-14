@@ -1,13 +1,9 @@
 :- consult(vimscript).
 :- use_module(vimscript).
 
-:- begin_tests(error).
+:- begin_tests(syntax_error).
   test(no_such_term) :- \+ eval(foobar, _, _).
-  test(not_equal) :- eval(tInt(42) @ nopos, _, R), \+ R = tInt(999) @ nopos.
-  test(non_string_dict_key) :-
-    eval(tDict([tInt(42) @ [1,2] : tInt(42) @ [1,3]]) @ [1,1], _, R),
-    R = tError('key is not string')@[1, 2].
-:- end_tests(error).
+:- end_tests(syntax_error).
 
 :- begin_tests(primitive_types).
   test(tAny) :-
@@ -40,6 +36,12 @@
   test(tTuple2) :-
     Value = tTuple([tInt(42) @ [1, 2], tFloat(12.34) @ [1, 3]]) @ [1, 1],
     eval(Value, _, Value).
+
+  test(not_equal) :-
+    eval(tInt(42) @ nopos, _, R), \+ R = tInt(999) @ nopos.
+  test(non_string_dict_key) :-
+    eval(tDict([tInt(42) @ [1,2] : tInt(42) @ [1,3]]) @ [1,1], _, R),
+    R = tError('key is not string')@[1, 2].
 :- end_tests(primitive_types).
 
 :- begin_tests(expr).

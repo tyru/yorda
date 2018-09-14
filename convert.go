@@ -266,6 +266,7 @@ main :- eval(file([`)
 	case *ast.Try:
 		// try([body...]) @ Pos
 		// try([body...], catch([Pattern, [body...], ...])) @ Pos
+		// try([body...], finally([body...])) @ Pos
 		// try([body...], catch([Pattern, [body...], ...]), finally([body...])) @ Pos
 		buf.WriteString("try([")
 		if err := c.writeStmtList(&buf, n.Body); err != nil {
@@ -439,9 +440,9 @@ main :- eval(file([`)
 	case *ast.BasicLit:
 		switch n.Kind {
 		case token.NUMBER:
-			// tInt(Value) @ Pos
-			buf.WriteString("tInt(")
-			buf.WriteString(n.Value)
+			// number(String) @ Pos
+			buf.WriteString("number(")
+			buf.WriteString(quote(n.Value))
 			buf.WriteString(")")
 		case token.STRING:
 			// tString(Value) @ Pos
@@ -509,8 +510,8 @@ main :- eval(file([`)
 		buf.WriteString(")")
 
 	case *ast.CurlyName:
-		// curlyName([curlyNameExpr() or curlyNameLit(), ...]) @ Pos
-		buf.WriteString("curlyName([")
+		// curly_name([CurlyNameExpr or CurlyNameLit, ...]) @ Pos
+		buf.WriteString("curly_name([")
 		for i, e := range n.Parts {
 			if i > 0 {
 				buf.WriteString(",")
@@ -522,14 +523,14 @@ main :- eval(file([`)
 		buf.WriteString("])")
 
 	case *ast.CurlyNameLit:
-		// curlyNameLit(Value) @ Pos
-		buf.WriteString("curlyNameLit(")
+		// curly_name_lit(Value) @ Pos
+		buf.WriteString("curly_name_lit(")
 		buf.WriteString(quote(n.Value))
 		buf.WriteString(")")
 
 	case *ast.CurlyNameExpr:
-		// curlyNameExpr(Value) @ Pos
-		buf.WriteString("curlyNameExpr(")
+		// curly_name_expr(Value) @ Pos
+		buf.WriteString("curly_name_expr(")
 		if _, err := io.Copy(&buf, c.toReader(n.Value)); err != nil {
 			return &errorReader{err}
 		}
