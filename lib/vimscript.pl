@@ -1100,8 +1100,7 @@ update_func(Env, Funcs, UpdateFuncs, RetEnv) :-
 
 % add_func(+Env, function(+Name, +Params, +Body) @ +Pos, -RetEnv)
 add_func(Env, function(Name, Params, Body) @ Pos, RetEnv) :-
-  add_params(Env, Params, Env1),
-  update_func(Env1, Funcs, [function(Name, Params, Body) @ Pos | Funcs], RetEnv).
+  update_func(Env, Funcs, [function(Name, Params, Body) @ Pos | Funcs], RetEnv).
 
 get_errors(Env, Errs) :- member(errors:Errs, Env).
 
@@ -1115,12 +1114,6 @@ add_errors(Env, Errs, RetEnv) :-
 % pop_errors(+Env, -Err, -RetEnv)
 pop_error(Env, Err, RetEnv) :-
   update_assoc_list(errors:[Err | Xs], Env, errors:Xs, RetEnv), !.
-
-% add_params(+Env, +Params, -RetEnv)
-add_params(Env, Params, RetEnv) :-
-  foldl(add_param1, Params, Env, RetEnv).
-add_param1(ident("", Name) @ Pos, Env, RetEnv) :-
-  add_var(Env, ident("a", Name) @ Pos, _, RetEnv).
 
 % call_func(+Env, call(+Fun, +Args), -R)
 call_func(_, call(Args :: R @ _, Args), R) :- !.
@@ -1151,11 +1144,10 @@ call_func(Env, call(call(ident(Scope, Name) @ _, InnerArgs) @ _, Args), R) :-
 
 % add_var(+Env, ident(+Scope, +Name) @ +Pos, +Rhs, -RetEnv)
 add_var(Env, ident("", Name) @ Pos, Rhs, RetEnv) :-
-  add_scope(Env, Name, Scope),
-  add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv).
+  !, add_scope(Env, Name, Scope),
+  add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv), !.
 add_var(Env, ident(Scope, Name) @ Pos, Rhs, RetEnv) :-
-  \+ Scope = "",
-  update_var(Env, Vars, [ident(Scope, Name) @ Pos => Rhs | Vars], RetEnv).
+  update_var(Env, Vars, [ident(Scope, Name) @ Pos => Rhs | Vars], RetEnv), !.
 
 % get_var(+Env, ident(?Scope, ?Name), -Pos, -Rhs)
 %
@@ -1192,17 +1184,17 @@ get_func(Env, ident(Scope, Name), Pos, Func) :-
 
 % ===================== Evaluation functions =====================
 
-% Add variable to Env
-% TODO destructuring, subscript, dot, ...
-on_let_enter(Env, let(Lhs, =, Rhs) @ _, on_enter, RetEnv) :-
-  add_var(Env, Lhs, Rhs, RetEnv), !.
-
 % Add function to Env
 on_function(Env, function(Name, Params, Body) @ Pos, on_enter, RetEnv) :-
   !, add_func(Env, function(Name, Params, Body) @ Pos, E1),
  succ_level(E1, RetEnv), !.
 on_function(Env, function(_, _, _) @ _, on_leave, RetEnv) :-
   !, pred_level(Env, RetEnv), !.
+
+% Add variable to Env
+% TODO destructuring, subscript, dot, reassignment, ...
+on_let_enter(Env, let(Lhs, =, Rhs) @ _, on_enter, RetEnv) :-
+  add_var(Env, Lhs, Rhs, RetEnv), !.
 
 eval_node(Env, Node, on_leave, RetEnv) :-
   get_stack(Env, Stack),

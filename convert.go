@@ -135,8 +135,8 @@ main :- eval(file([`)
 		buf.WriteString(")")
 
 	case *ast.Let:
-		// let(lhs, Op, rhs) @ Pos
-		// lhs = [a, b, c | rest]
+		// let(Lhs, Op, Rhs) @ Pos
+		// Lhs = [a, b, c | rest]
 		buf.WriteString("let(")
 		if err := c.writeLHS(&buf, n.Left, n.List, n.Rest); err != nil {
 			return &errorReader{err}
