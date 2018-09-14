@@ -529,7 +529,7 @@ main :- eval(file([`)
 		buf.WriteString(")")
 
 	case *ast.CurlyNameExpr:
-		// curly_name_expr(Value) @ Pos
+		// curly_name_expr(Expr) @ Pos
 		buf.WriteString("curly_name_expr(")
 		if _, err := io.Copy(&buf, c.toReader(n.Value)); err != nil {
 			return &errorReader{err}

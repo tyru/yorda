@@ -43,6 +43,9 @@ split_list(0, Dropped, [], Dropped) :- !.
 split_list(N, [X | List], [X | Taken], Dropped) :-
   N > 0, M is N - 1, split_list(M, List, Taken, Dropped), !.
 
+take(N, L, R) :- split_list(N, L, R, _).
+drop(N, L, R) :- split_list(N, L, _, R).
+
 error(Format, Args, tError(Msg)) :-
   format(atom(Msg), Format, Args), !.
 
@@ -74,6 +77,8 @@ prim(tDict(_)).
 prim(tTuple(_)).
 prim(tError(_)).    % tError(Msg)
 
+valid(V) :- \+ V = tError(_).
+
 to_bool(tBool(V), tBool(V)).
 to_bool(tNone(_), tBool(false)).
 to_bool(tInt(_), tBool(_)).
@@ -92,8 +97,8 @@ to_int(tBool(_), tInt(_)).
 to_int(tNone(_), tInt(_)).
 to_int(tAny, tInt(_)).
 
-get_prop(tAny, _, tAny).
-get_prop(_, tAny, tAny).
+get_prop(tAny, V, tAny) :- valid(V).
+get_prop(V, tAny, tAny) :- valid(V).
 get_prop(tDict(_), Right, tAny) :- to_string(Right, _).
 get_prop(tString(_), Right, tAny) :- to_int(Right, _).
 
@@ -1240,40 +1245,201 @@ reduce_key_values([V, tString(K) @ Pos | Xs], [tString(K) @ Pos : V | Entries], 
 reduce_key_values([_, _ @ Pos | _], [], [Err @ Pos]) :-
   !, error('key is not string', [], Err), !.
 
+% reduce(+Env, file(+Body) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, file(_) @ _, Stack, Stack, []) :- !.
 
+% reduce(+Env, comment(+Text) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, comment(_) @ _, Stack, Stack, []) :- !.
 
+% reduce(+Env, excmd(+Command) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, excmd(_) @ _, Stack, Stack, []) :- !.
 
+% reduce(+Env, function(+Name, +Params, +Body) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, function(_, ParamsOrig, _) @ _, Stack, RetStack, []) :-
   !, length(ParamsOrig, ParamsN),
   N is 1 + ParamsN,    % Name + Params
   split_list(N, Stack, _, RetStack), !.
 
+% reduce(+Env, return(+Expr) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, return(_) @ _, [_ | Stack], Stack, []) :- !.
 
+% reduce(+Env, excall(+FuncCall) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, excall(_) @ _, [_ | Stack], Stack, []) :- !.
 
+% reduce(+Env, let(+Lhs, +Op, +Rhs) @ +Pos, +Stack, -RetStack, -Errs)
 % TODO destructuring, subscript, dot, ...
 reduce(_, let(_, _, _) @ _, [_, _ | Stack], Stack, []) :- !.
 
-reduce(_, if(_, _) @ _, [_ | Stack], Stack, []) :- !.
+% reduce(+Env, unlet(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, unlet(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
 
-reduce(_, echo(ExprList) @ _, Stack, RetStack, []) :-
-  !, length(ExprList, N),
+pop_expr_list(ExprList, Stack, RetStack) :-
+  length(ExprList, N),
   split_list(N, Stack, _, RetStack), !.
 
+% reduce(+Env, lockvar(+Depth, +ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, lockvar(_, ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, unlockvar(+Depth, +ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, unlockvar(_, ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, if(+Cond, +Body) @ +Pos, +Stack, -RetStack, -Errs)
+% Get Cond expression from stack.
+reduce(_, if(_, _) @ _, [_ | Stack], Stack, []) :- !.
+% reduce(+Env, if(+Cond, +Body, +Clause) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, if(_, _, Clause) @ _, [_ | Stack], RetStack, []) :-
+  !, pop_if_clause(Clause, Stack, RetStack), !.
+% reduce(+Env, if(+Cond, +Body, +Clause1, +Clause2) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, if(_, _, Clause1, Clause2) @ _, [_ | Stack], RetStack, []) :-
+  !, pop_if_clause(Clause1, Stack, Stack1),
+  pop_if_clause(Clause2, Stack1, RetStack), !.
+
+pop_if_clause(else(_), Stack, Stack) :- !.
+pop_if_clause(elseif([]), Stack, Stack) :- !.
+% elseif([+Cond, +Body, ...])
+% Get Cond expression from stack.
+pop_if_clause(elseif([_, _ | Xs]), [_ | Stack], RetStack) :-
+  !, pop_if_clause(elseif(Xs), Stack, RetStack).
+
+% reduce(+Env, while(+Cond, +Body) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, while(_, _) @ _, [_ | Stack], Stack, []) :- !.
+
+% reduce(+Env, for(+Lhs, +Rhs, +Body) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, for(_, in, _, _) @ _, [_, _ | Stack], Stack, []) :- !.
+
+% reduce(+Env, continue() @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, continue() @ _, Stack, Stack, []) :- !.
+
+% reduce(+Env, break() @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, break() @ _, Stack, Stack, []) :- !.
+
+% reduce(+Env, try(+Body) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, try(_) @ _, Stack, Stack, []) :- !.
+% reduce(+Env, try(+Body, +Clause) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, try(_, _) @ _, Stack, Stack, []) :- !.
+% reduce(+Env, try(+Body, +Clause1, +Clause2) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, try(_, _, _) @ _, Stack, Stack, []) :- !.
+
+% reduce(+Env, throw(+Expr) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, try(_) @ _, [_ | Stack], Stack, []) :- !.
+
+% reduce(+Env, echo(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, echo(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, echon(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, echon(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, echomsg(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, echomsg(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, echoerr(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, echoerr(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, echohl(+Name) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, echohl(_) @ _, Stack, Stack, []) :- !.
+
+% reduce(+Env, execute(+ExprList) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, execute(ExprList) @ _, Stack, RetStack, []) :-
+  !, pop_expr_list(ExprList, Stack, RetStack), !.
+
+% reduce(+Env, ternary(+Cond, +Left, +Right) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, ternary(_, _, _) @ _, [_, _, _ | Stack], Stack, []) :- !.
+
+% reduce(+Env, op(+Lhs, +Op, +Rhs) @ +Pos, +Stack, -RetStack, -Errs)
+% TODO check lhs, rhs types
+reduce(_, op(_, _, _) @ Pos, [_, _ | Stack], [tInt(_) @ Pos | Stack], []) :- !.
+
+% reduce(+Env, op(+Op, +Expr) @ +Pos, +Stack, -RetStack, -Errs)
+% TODO check expr types
+reduce(_, op(Op, _) @ Pos, [V @ Pos | Stack], [R @ Pos | Stack], []) :-
+  !, eval_unary_op(Op, V, R), !.
+
+eval_unary_op(+, tInt(V), tInt(V)) :- !.
+eval_unary_op(+, tFloat(V), tFloat(V)) :- !.
+eval_unary_op(+, V, R) :- to_int(V, R), !.
+
+eval_unary_op(-, tInt(V), tInt(-V)) :- !.
+eval_unary_op(-, tFloat(V), tFloat(-V)) :- !.
+eval_unary_op(-, V, R) :- to_int(V, V1), eval_unary_op(-, V1, R), !.
+
+eval_unary_op(!, tInt(V), tInt(R)) :- !, eval_not(V, R), !.
+eval_unary_op(!, tFloat(V), tFloat(R)) :- !, eval_not(V, R), !.
+eval_unary_op(!, V, R) :- to_int(V, V1), eval_unary_op(!, V1, R), !.
+
+eval_not(V, V) :- var(V), !.
+eval_not(0, 1) :- !.
+eval_not(_, 0) :- !.
+eval_not(0.0, 1.0) :- !.
+eval_not(_, 0.0) :- !.
+eval_not(V, R) :- to_int(V, V1), eval_not(V1, R), !.
+
+% reduce(+Env, subscript(+Lhs, +Rhs) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(_, subscript(_, _) @ Pos, [Right @ _, Left @ _ | Stack], [Value @ Pos | Stack], []) :-
   !, get_prop(Left, Right, Value), !.
 
-reduce(_, dot(_, _) @ Pos, [ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack], []) :-
-  !, get_prop(Left, tString(Name), Value), !.
+% reduce(+Env, slice(+Lhs, +Low, :, +High) @ +Pos, +Stack, -RetStack, -Errs)
+% reduce(+Env, slice(+Lhs, :, +High) @ +Pos, +Stack, -RetStack, -Errs)
+% reduce(+Env, slice(+Lhs, +Low, :) @ +Pos, +Stack, -RetStack, -Errs)
+% reduce(+Env, slice(+Lhs, :) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(Env, slice(_, :) @ Pos, Stack, RetStack, Errs) :-
+  !, reduce(Env, slice(_, _, :, _) @ Pos, [tInt(-1) @ _, tInt(0) @ _ | Stack], RetStack, Errs), !.
+reduce(Env, slice(_, :, _) @ Pos, [Rhs | Stack], RetStack, Errs) :-
+  !, reduce(Env, slice(_, _, :, _) @ Pos, [Rhs, tInt(0) @ _ | Stack], RetStack, Errs), !.
+reduce(Env, slice(_, _, :) @ Pos, [Lhs | Stack], RetStack, Errs) :-
+  !, reduce(Env, slice(_, _, :, _) @ Pos, [tInt(-1) @ _, Lhs | Stack], RetStack, Errs), !.
+reduce(_, slice(_, _, :, _) @ Pos, [Rhs @ _, Lhs @ _, Expr @ _ | Stack], [Value @ Pos | Stack], Errs) :-
+  !, eval_slice(Expr, Lhs, Rhs, V),
+  handle_error(V, Value, Errs), !.
 
-% TODO check lhs, rhs types
-% TODO other ops
-reduce(_, op(_, ==, _) @ Pos, [_, _ | Stack], [tInt(_) @ Pos | Stack], []) :- !.
+handle_error(tError(Msg), tError(Msg), [tError(Msg)]) :- !.
+handle_error(V, V, []) :- !.
 
+% eval_slice(+Expr, +Lhs, +Rhs, -Value)
+% check if Expr, Lhs, Rhs are fully instantiated.
+% if not, do not touch the inner value of primitive types.
+eval_slice(tString(S), tInt(From), tInt(To), R) :-
+  nonvar(S), nonvar(From), nonvar(To), !,
+  slice_with_range_check(S, From, To, R), !.
+eval_slice(tString(_), tInt(_), tInt(_), tString(_)) :- !.
+eval_slice(tList(L), tInt(From), tInt(To), R) :-
+  nonvar(L), nonvar(From), nonvar(To), !,
+  slice_with_range_check(L, From, To, R), !.
+eval_slice(tList(_), tInt(_), tInt(_), tList(_)) :- !.
+eval_slice(_, _, _, Err) :-
+  error('slice can only be used for String or List', [], Err), !.
+
+% Fix negative indices to positive indices.
+slice_with_range_check(L, From, To, R) :-
+  From < 0, !,
+  length(L, N), N1 is N + From,
+  check_range(L, N, N1, To, R), !.
+slice_with_range_check(L, From, To, R) :-
+  To < 0, !,
+  length(L, N), N1 is N + To,
+  check_range(L, N, From, N1, R), !.
+slice_with_range_check(L, From, To, R) :-
+  length(L, N), check_range(L, N, From, To, R), !.
+
+% Check out of range (e.g. [1,2,3][:-4])
+check_range(L, N, From, To, R) :-
+  From >= 0, To >= 0, From < N, To < N, !,
+  slice(L, From, To, R), !.
+check_range(_, _, _, R) :-
+  error('out of range', [], R), !.
+
+slice(L, From, To, R) :-
+  drop(From, L, L1),
+  N is To + 1 - From,
+  take(N, L1, R), !.
+
+% reduce(+Env, call(+Fun, +Args) @ +Pos, +Stack, -RetStack, -Errs)
 reduce(Env, call(_, ArgsOrig) @ Pos, Stack, RetStack, []) :-
   !, length(ArgsOrig, Arity),
   N is 1 + Arity,    % Fun + Args
@@ -1281,8 +1447,19 @@ reduce(Env, call(_, ArgsOrig) @ Pos, Stack, RetStack, []) :-
   call_func(Env, call(Fun, Args), Value),
   RetStack = [Value @ Pos | S1], !.
 
-% reduce(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
-reduce(_, ident(Scope, Name) @ Pos, Stack, [ident(Scope, Name) @ Pos, Stack], []) :- !.
+% reduce(+Env, dot(+Lhs, +Rhs) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, dot(_, _) @ Pos, [ident(_, Name) @ _, Left @ _ | Stack], [Value @ Pos | Stack], []) :-
+  !, get_prop(Left, tString(Name), Value), !.
+
+% reduce(+Env, number(+String) @ +Pos, +Stack, -RetStack, -Errs)
+reduce(_, number(S) @ Pos, Stack, [Value @ Pos | Stack], []) :-
+  !, parse_number(S, Value), !.
+
+% TODO implement parsing Vim script number format
+parse_number(S, V) :-
+  number_codes(N, S), parse_number1(N, V).
+parse_number1(N, tInt(N)) :- integer(N), !.
+parse_number1(F, tFloat(F)) :- float(F), !.
 
 % reduce(+Env, option(+Name) @ +Pos, -RetEnv)
 reduce(_, option(Name) @ Pos, Stack, [Value @ Pos | Stack], []) :-
@@ -1295,6 +1472,32 @@ reduce(_, env(_) @ Pos, Stack, [tString(_) @ Pos | Stack], []) :- !.
 
 % reduce(+Env, reg(+Name) @ +Pos, -RetEnv)
 reduce(_, reg(_) @ Pos, Stack, [tString(_) @ Pos | Stack], []) :- !.
+
+% reduce(+Env, ident(+Scope, +Name) @ +Pos, -RetEnv)
+reduce(_, ident(Scope, Name) @ Pos, Stack, [ident(Scope, Name) @ Pos | Stack], []) :- !.
+
+% reduce(+Env, curly_name([+CurlyNameExpr or +CurlyNameLit, ...]) @ +Pos, -RetEnv)
+reduce(_, curly_name(List) @ Pos, Stack, [curly_name(RetList) @ Pos | Popped], []) :-
+  !, length(List, N),
+  split_list(N, Stack, RetList, Popped), !.
+
+% reduce(+Env, curly_name_lit(+Value) @ +Pos, -RetEnv)
+reduce(_, curly_name_lit(Value) @ Pos, Stack, [curly_name_lit(Value) @ Pos | Stack], []) :- !.
+
+% reduce(+Env, curly_name_expr(+Expr) @ +Pos, -RetEnv)
+reduce(_, curly_name_expr(Expr) @ Pos, Stack, [curly_name_expr(Expr) @ Pos | Stack], []) :- !.
+
+% TODO push funcref value.
+% reduce(+Env, lambda(+Params, +Expr) @ +Pos, -RetEnv)
+reduce(_, lambda(ParamsOrig, _) @ Pos, Stack, RetStack, []) :-
+  !, length(ParamsOrig, N),
+  split_list(N, Stack, Params, Stack1),
+  [Expr | Stack2] = Stack1,
+  RetStack = [lambda(Params, Expr) @ Pos | Stack2], !.
+
+% reduce(+Env, par(+Expr) @ +Pos, -RetEnv)
+% The top of stack is Expr.
+reduce(_, par(_) @ _, Stack, Stack, []) :- !.
 
 % ===================== Traversal functions =====================
 
@@ -1496,9 +1699,8 @@ trav(Env, subscript(Left, Right) @ _, RetEnv) :-
 % trav(+Env, slice(+Lhs, :, +High) @ +Pos, -RetEnv)
 % trav(+Env, slice(+Lhs, +Low, :) @ +Pos, -RetEnv)
 % trav(+Env, slice(+Lhs, :) @ +Pos, -RetEnv)
-trav(Env, slice(Lhs, Clause) @ _, RetEnv) :-
-  !, traverse(Env, Lhs, E1),
-  traverse_slice_clause(E1, Clause, RetEnv), !.
+trav(Env, slice(Lhs, :) @ _, RetEnv) :-
+  !, traverse(Env, Lhs, RetEnv), !.
 trav(Env, slice(Lhs, Clause1, Clause2) @ _, RetEnv) :-
   !, traverse(Env, Lhs, E1),
   traverse_slice_clause(E1, Clause1, E2),
