@@ -1,0 +1,4 @@
+github.com/haya14busa/go-vimlparser v0.0.0-20171121121341-6c96c660fcd0 h1:sxoYbdIYLfxgz8159xE5mXJUmQeTICnIFeSkkhFVc98=
+github.com/haya14busa/go-vimlparser v0.0.0-20171121121341-6c96c660fcd0/go.mod h1:VE0/1pIFG9fOhtMe4dblZq/ObGQn80iOJUQyJ9lmub0=
+github.com/pkg/errors v0.8.0 h1:WdK/asTD0HN+q6hsWO3/vpuAkAr+tw6aNJNDFFf0+qw=
+github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
